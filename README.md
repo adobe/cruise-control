@@ -1,8 +1,9 @@
 Cruise Control for Apache Kafka
 ===================
 
-[![CI](https://github.com/linkedin/cruise-control/actions/workflows/ci.yaml/badge.svg)](https://github.com/linkedin/cruise-control/actions/workflows/ci.yaml)
-[![CircleCI](https://circleci.com/gh/linkedin/cruise-control.svg?style=svg)](https://circleci.com/gh/linkedin/cruise-control)
+[![CircleCI](https://circleci.com/gh/adobe/cruise-control.svg?style=svg)](https://circleci.com/gh/adobe/cruise-control)  
+[![Github Actions](https://github.com/adobe/cruise-control/workflows/build-publish-docker-image/badge.svg)](https://github.com/adobe/cruise-control/workflows/build-publish-docker-image/badge.svg)  
+[![Docker Hub](https://img.shields.io/docker/v/adobe/cruise-control?sort=date&style=plastic)](https://hub.docker.com/r/adobe/cruise-control/tags)
 
 
 ### Introduction ###
