@@ -1,10 +1,12 @@
-FROM adoptopenjdk/openjdk11:jdk-11.0.9_11-debian-slim
+FROM adoptopenjdk/openjdk11:jdk-11.0.9.1_1-debian-slim
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates
 RUN mkdir /cruise-control
 COPY . /cruise-control
 RUN cd cruise-control && echo && ./gradlew jar copyDependantLibs
 
+
+RUN ls -la /cruise-control/cruise-control/build/libs/cruise-control-*.jar
 RUN mv -v /cruise-control/cruise-control/build/libs/cruise-control-*.jar \
   /cruise-control/cruise-control/build/libs/cruise-control.jar
 RUN mv -v /cruise-control/cruise-control/build/dependant-libs/cruise-control-metrics-reporter-*.jar \
@@ -20,7 +22,7 @@ RUN git rev-parse HEAD
 RUN npm install
 RUN npm run build
 
-FROM openjdk:14.0.2-slim
+FROM azul/zulu-openjdk:14.0.2
 ARG SOURCE_REF
 ARG SOURCE_TYPE
 ARG DOCKERFILE_PATH
