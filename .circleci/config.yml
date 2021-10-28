@@ -12,6 +12,8 @@ jobs:
       - restore_cache:
           key: dependency-cache-{{ checksum "build.gradle" }}
       - run:
+          command: git tag 2.5.0-SNAPSHOT
+      - run:
           command: ./gradlew --no-daemon clean javadoc
       - run:
           # run static analysis tasks standalone to avoid OOME in CircleCI
