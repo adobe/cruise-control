@@ -86,7 +86,7 @@ public class MinTopicLeadersPerBrokerGoal extends AbstractGoal {
 
   @Override
   public boolean isHardGoal() {
-    return true;
+    return false;
   }
 
   /**
@@ -292,8 +292,7 @@ public class MinTopicLeadersPerBrokerGoal extends AbstractGoal {
     finish();
   }
 
-  private void ensureBrokersAllHaveEnoughLeaderOfTopics(ClusterModel clusterModel, OptimizationOptions optimizationOptions)
-      throws OptimizationFailureException {
+  private void ensureBrokersAllHaveEnoughLeaderOfTopics(ClusterModel clusterModel, OptimizationOptions optimizationOptions) {
     if (_mustHaveTopicMinLeadersPerBroker.isEmpty()) {
       // Early termination to avoid some unnecessary computation
       return;
@@ -305,9 +304,9 @@ public class MinTopicLeadersPerBrokerGoal extends AbstractGoal {
       for (String mustHaveLeaderPerBrokerTopicName : _mustHaveTopicMinLeadersPerBroker.keySet()) {
         int leaderCount = broker.numLeadersFor(mustHaveLeaderPerBrokerTopicName);
         if (leaderCount < minTopicLeadersPerBroker(mustHaveLeaderPerBrokerTopicName)) {
-          throw new OptimizationFailureException(String.format("[%s] Broker %d has insufficient per-broker leaders for topic %s (required: %d "
-                                                               + "current: %d).", name(), broker.id(), mustHaveLeaderPerBrokerTopicName,
-                                                               minTopicLeadersPerBroker(mustHaveLeaderPerBrokerTopicName), leaderCount));
+          LOG.warn("[{}] Broker {} has insufficient per-broker leaders for topic {} (required: {} current: {}).",
+                  name(), broker.id(), mustHaveLeaderPerBrokerTopicName,
+                  minTopicLeadersPerBroker(mustHaveLeaderPerBrokerTopicName), leaderCount);
         }
       }
     }
@@ -343,7 +342,7 @@ public class MinTopicLeadersPerBrokerGoal extends AbstractGoal {
                                               Broker broker,
                                               ClusterModel clusterModel,
                                               Set<Goal> optimizedGoals,
-                                              OptimizationOptions optimizationOptions) throws OptimizationFailureException {
+                                              OptimizationOptions optimizationOptions) {
     int topicLeaderCountOnReceiverBroker = broker.numLeadersFor(topicMustHaveLeaderPerBroker);
     if (topicLeaderCountOnReceiverBroker >= minTopicLeadersPerBroker(topicMustHaveLeaderPerBroker)) {
       // This broker has enough leader replica(s) for the given topic
@@ -408,9 +407,10 @@ public class MinTopicLeadersPerBrokerGoal extends AbstractGoal {
         }
       }
     }
-    throw new OptimizationFailureException(String.format("[%s] Cannot make broker %d have at least %d leaders from topic %s.",
+    LOG.warn("{} Cannot make broker {} have at least {} leaders from topic {}. Leaders on broker: {}",
                                                          name(), broker.id(),
-                                                         minTopicLeadersPerBroker(topicMustHaveLeaderPerBroker), topicMustHaveLeaderPerBroker));
+                                                         minTopicLeadersPerBroker(topicMustHaveLeaderPerBroker),
+                                                         topicMustHaveLeaderPerBroker, topicLeaderCountOnReceiverBroker);
   }
 
   /**
