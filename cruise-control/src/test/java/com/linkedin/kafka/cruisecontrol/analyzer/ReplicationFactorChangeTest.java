@@ -160,9 +160,8 @@ public class ReplicationFactorChangeTest {
                                                                    Class<? extends Goal> goalClass,
                                                                    boolean smallCluster) {
     if ((replicationFactor == LARGE_REPLICATION_FACTOR && goalClass == RackAwareGoal.class)
-        || (replicationFactor == LARGE_REPLICATION_FACTOR && goalClass == ReplicaCapacityGoal.class && !smallCluster)
-        || (replicationFactor == SMALL_REPLICATION_FACTOR && goalClass == MinTopicLeadersPerBrokerGoal.class)
-        || (replicationFactor == LARGE_REPLICATION_FACTOR && goalClass == MinTopicLeadersPerBrokerGoal.class && !smallCluster)) {
+            || (replicationFactor == LARGE_REPLICATION_FACTOR && goalClass == ReplicaCapacityGoal.class && !smallCluster)
+    ) {
       return OptimizationFailureException.class;
     }
     return null;
@@ -192,9 +191,7 @@ public class ReplicationFactorChangeTest {
              || goalClass == LeaderBytesInDistributionGoal.class && !(replicationFactor != SMALL_REPLICATION_FACTOR && !smallCluster)
              || replicationFactor == LARGE_REPLICATION_FACTOR && goalClass == DiskUsageDistributionGoal.class && !smallCluster
              || replicationFactor == LARGE_REPLICATION_FACTOR && goalClass == NetworkInboundUsageDistributionGoal.class && !smallCluster
-             || replicationFactor == LARGE_REPLICATION_FACTOR && goalClass == CpuUsageDistributionGoal.class
-             || replicationFactor == SMALL_REPLICATION_FACTOR && goalClass == MinTopicLeadersPerBrokerGoal.class
-             || replicationFactor == LARGE_REPLICATION_FACTOR && goalClass == MinTopicLeadersPerBrokerGoal.class && !smallCluster);
+             || replicationFactor == LARGE_REPLICATION_FACTOR && goalClass == CpuUsageDistributionGoal.class);
   }
 
   @Test
