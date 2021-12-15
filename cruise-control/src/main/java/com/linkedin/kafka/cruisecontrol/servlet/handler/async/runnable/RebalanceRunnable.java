@@ -81,6 +81,7 @@ public class RebalanceRunnable extends GoalBasedOperationRunnable {
     super(kafkaCruiseControl, new OperationFuture("Rebalance for Self-Healing"), selfHealingGoals, allowCapacityEstimation,
             excludeRecentlyDemotedBrokers, excludeRecentlyRemovedBrokers, anomalyId, reasonSupplier, stopOngoingExecution, skipHardGoalCheck);
     _concurrentInterBrokerPartitionMovements = SELF_HEALING_CONCURRENT_MOVEMENTS;
+    _maxInterBrokerPartitionMovements = SELF_HEALING_CONCURRENT_MOVEMENTS;
     _concurrentIntraBrokerPartitionMovements = SELF_HEALING_CONCURRENT_MOVEMENTS;
     _concurrentLeaderMovements = SELF_HEALING_CONCURRENT_MOVEMENTS;
     _executionProgressCheckIntervalMs = SELF_HEALING_EXECUTION_PROGRESS_CHECK_INTERVAL_MS;
@@ -89,7 +90,6 @@ public class RebalanceRunnable extends GoalBasedOperationRunnable {
     _ignoreProposalCache = ignoreProposalCache;
     _destinationBrokerIds = SELF_HEALING_DESTINATION_BROKER_IDS;
     _isRebalanceDiskMode = isRebalanceDiskMode;
-
   }
 
   public RebalanceRunnable(KafkaCruiseControl kafkaCruiseControl,
