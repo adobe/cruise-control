@@ -3,11 +3,7 @@ set -e
 cd /opt/cruise-control
 
 # Set heap memory settings for container environments
-<<<<<<< HEAD
 export KAFKA_HEAP_OPTS="--add-opens java.base/java.util=ALL-UNNAMED -XX:InitialRAMPercentage=30 -XX:MaxRAMPercentage=85 \
-=======
-export KAFKA_HEAP_OPTS="-XX:InitialRAMPercentage=30 -XX:MaxRAMPercentage=85 \
->>>>>>> 2a15684f ([BUILD] - Add docker build and publish github action)
 -server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent \
 -XX:MetaspaceSize=96m -XX:MinMetaspaceFreeRatio=50 -XX:MaxMetaspaceFreeRatio=80 \
 -Djava.awt.headless=true -Dsun.net.inetaddr.ttl=60 \

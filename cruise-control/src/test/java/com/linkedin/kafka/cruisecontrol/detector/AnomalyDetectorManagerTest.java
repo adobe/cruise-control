@@ -181,8 +181,9 @@ public class AnomalyDetectorManagerTest {
     Properties props = KafkaCruiseControlUnitTestUtils.getKafkaCruiseControlProperties();
     KafkaCruiseControlConfig kafkaCruiseControlConfig = new KafkaCruiseControlConfig(props);
     EasyMock.expect(mockKafkaCruiseControl.config()).andReturn(kafkaCruiseControlConfig).times(1, 4);
-    startRunnableDetectors(mockDetectorScheduler, mockGoalViolationDetector, mockIntraBrokerGoalViolationDetector, mockMetricAnomalyDetector,
-                           mockDiskFailureDetector, mockBrokerFailureDetector, mockTopicAnomalyDetector, mockMaintenanceEventDetector, executorService);
+    startRunnableDetectors(mockDetectorScheduler, mockGoalViolationDetector, mockIntraBrokerGoalViolationDetector,
+                           mockMetricAnomalyDetector, mockDiskFailureDetector, mockBrokerFailureDetector,
+                           mockTopicAnomalyDetector, mockMaintenanceEventDetector, executorService);
     // Schedule a delayed check
     EasyMock.expect(mockDetectorScheduler.schedule(EasyMock.isA(Runnable.class),
                                                    EasyMock.eq(MOCK_DELAY_CHECK_MS),
@@ -292,14 +293,10 @@ public class AnomalyDetectorManagerTest {
     EasyMock.expect(mockKafkaCruiseControl.getLoadMonitorTaskRunnerState())
             .andReturn(LoadMonitorTaskRunner.LoadMonitorTaskRunnerState.RUNNING).times(1, 2);
 
-<<<<<<< HEAD
-    startRunnableDetectors(mockDetectorScheduler, mockGoalViolationDetector, mockMetricAnomalyDetector, mockDiskFailureDetector,
-                           mockBrokerFailureDetector, mockTopicAnomalyDetector, mockMaintenanceEventDetector, executorService);
-=======
     startRunnableDetectors(mockDetectorScheduler, mockGoalViolationDetector, mockIntraBrokerGoalViolationDetector,
-                          mockMetricAnomalyDetector, mockDiskFailureDetector, mockTopicAnomalyDetector,
-                          mockMaintenanceEventDetector, executorService);
->>>>>>> 8a194674 (Add support for intra.broker.goals in anomaly detection / self healing)
+                          mockMetricAnomalyDetector, mockDiskFailureDetector, mockBrokerFailureDetector,
+                          mockTopicAnomalyDetector, mockMaintenanceEventDetector, executorService);
+
     shutdownDetector(mockDetectorScheduler, executorService);
 
     // The following state are used to test the delayed check when executor is idle.
@@ -593,15 +590,10 @@ public class AnomalyDetectorManagerTest {
     Properties props = KafkaCruiseControlUnitTestUtils.getKafkaCruiseControlProperties();
     KafkaCruiseControlConfig kafkaCruiseControlConfig = new KafkaCruiseControlConfig(props);
     EasyMock.expect(mockKafkaCruiseControl.config()).andReturn(kafkaCruiseControlConfig).times(2);
-
-<<<<<<< HEAD
-    startRunnableDetectors(mockDetectorScheduler, mockGoalViolationDetector, mockMetricAnomalyDetector, mockDiskFailureDetector,
-                           mockBrokerFailureDetector, mockTopicAnomalyDetector, mockMaintenanceEventDetector, executorService);
-=======
+    
     startRunnableDetectors(mockDetectorScheduler, mockGoalViolationDetector, mockIntraBrokerGoalViolationDetector,
-                          mockMetricAnomalyDetector, mockDiskFailureDetector, mockTopicAnomalyDetector,
-                          mockMaintenanceEventDetector, executorService);
->>>>>>> 8a194674 (Add support for intra.broker.goals in anomaly detection / self healing)
+                           mockMetricAnomalyDetector, mockDiskFailureDetector, mockBrokerFailureDetector,
+                           mockTopicAnomalyDetector, mockMaintenanceEventDetector, executorService);
     shutdownDetector(mockDetectorScheduler, executorService);
     EasyMock.expect(mockAnomalyNotifier.selfHealingEnabledRatio()).andReturn(MOCK_SELF_HEALING_ENABLED_RATIO);
 
