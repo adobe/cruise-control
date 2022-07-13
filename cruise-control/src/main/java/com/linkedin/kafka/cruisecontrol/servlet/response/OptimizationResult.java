@@ -20,6 +20,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import com.linkedin.kafka.cruisecontrol.servlet.parameters.RemoveDisksParameters;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -85,6 +87,8 @@ public class OptimizationResult extends AbstractCruiseControlResponse {
       case TOPIC_CONFIGURATION:
         return String.format("%n%nCluster load after updating replication factor of topics %s%n",
                              _optimizerResult.topicsWithReplicationFactorChange());
+      case REMOVE_DISKS:
+        return String.format("%n%nCluster load after removing disks %s:%n", ((RemoveDisksParameters) parameters).brokerIdAndLogdirs());
       default:
         LOG.error("Unrecognized endpoint.");
         return "Unrecognized endpoint.";
