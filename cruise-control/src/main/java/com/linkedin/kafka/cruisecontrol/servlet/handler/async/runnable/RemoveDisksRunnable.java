@@ -128,18 +128,20 @@ public class RemoveDisksRunnable extends GoalBasedOperationRunnable {
     }
 
     private void checkCanRemoveDisks(Map<Integer, Set<String>> brokerIdAndLogdirs, ClusterModel clusterModel) {
-        for (Integer brokerId : brokerIdAndLogdirs.keySet()) {
+        for (Map.Entry<Integer, Set<String>> entry : brokerIdAndLogdirs.entrySet()) {
+            Integer brokerId = entry.getKey();
+            Set<String> logDirs = entry.getValue();
             Broker broker = clusterModel.broker(brokerId);
-            if (broker.disks().size() < brokerIdAndLogdirs.get(brokerId).size()) {
+            if (broker.disks().size() < logDirs.size()) {
                 throw new IllegalArgumentException(String.format("Invalid log dirs provided for broker %d.", brokerId));
-            } else if (broker.disks().size() == brokerIdAndLogdirs.get(brokerId).size()) {
+            } else if (broker.disks().size() == logDirs.size()) {
                 throw new IllegalArgumentException(String.format("No log dir remaining to move replicas to for broker %d.", brokerId));
             }
 
             double removedCapacity = 0.0;
             double remainingCapacity = 0.0;
             for (Disk disk : broker.disks()) {
-                if (brokerIdAndLogdirs.get(brokerId).contains(disk.logDir())) {
+                if (logDirs.contains(disk.logDir())) {
                     removedCapacity += disk.capacity();
                 } else {
                     remainingCapacity += disk.capacity();
