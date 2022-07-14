@@ -1,10 +1,17 @@
+/*
+ * Copyright 2018 LinkedIn Corp. Licensed under the BSD 2-Clause License (the "License"). See License in the project root for license information.
+ */
+
 package com.linkedin.kafka.cruisecontrol.servlet.parameters;
 
 import com.linkedin.kafka.cruisecontrol.config.constants.ExecutorConfig;
 import com.linkedin.kafka.cruisecontrol.servlet.UserRequestException;
-
 import java.io.UnsupportedEncodingException;
-import java.util.*;
+import java.util.SortedSet;
+import java.util.TreeSet;
+import java.util.Collections;
+import java.util.Set;
+import java.util.Map;
 
 import static com.linkedin.kafka.cruisecontrol.servlet.parameters.ParameterUtils.*;
 

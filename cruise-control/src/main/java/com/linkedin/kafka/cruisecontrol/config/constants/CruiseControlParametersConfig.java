@@ -4,7 +4,27 @@
 
 package com.linkedin.kafka.cruisecontrol.config.constants;
 
-import com.linkedin.kafka.cruisecontrol.servlet.parameters.*;
+import com.linkedin.kafka.cruisecontrol.servlet.parameters.RemoveDisksParameters;
+import com.linkedin.kafka.cruisecontrol.servlet.parameters.PauseResumeParameters;
+import com.linkedin.kafka.cruisecontrol.servlet.parameters.StopProposalParameters;
+import com.linkedin.kafka.cruisecontrol.servlet.parameters.TrainParameters;
+import com.linkedin.kafka.cruisecontrol.servlet.parameters.ClusterLoadParameters;
+import com.linkedin.kafka.cruisecontrol.servlet.parameters.PartitionLoadParameters;
+import com.linkedin.kafka.cruisecontrol.servlet.parameters.BootstrapParameters;
+import com.linkedin.kafka.cruisecontrol.servlet.parameters.ProposalsParameters;
+import com.linkedin.kafka.cruisecontrol.servlet.parameters.CruiseControlStateParameters;
+import com.linkedin.kafka.cruisecontrol.servlet.parameters.KafkaClusterStateParameters;
+import com.linkedin.kafka.cruisecontrol.servlet.parameters.UserTasksParameters;
+import com.linkedin.kafka.cruisecontrol.servlet.parameters.ReviewBoardParameters;
+import com.linkedin.kafka.cruisecontrol.servlet.parameters.ReviewParameters;
+import com.linkedin.kafka.cruisecontrol.servlet.parameters.AddBrokerParameters;
+import com.linkedin.kafka.cruisecontrol.servlet.parameters.RemoveBrokerParameters;
+import com.linkedin.kafka.cruisecontrol.servlet.parameters.FixOfflineReplicasParameters;
+import com.linkedin.kafka.cruisecontrol.servlet.parameters.DemoteBrokerParameters;
+import com.linkedin.kafka.cruisecontrol.servlet.parameters.RebalanceParameters;
+import com.linkedin.kafka.cruisecontrol.servlet.parameters.AdminParameters;
+import com.linkedin.kafka.cruisecontrol.servlet.parameters.TopicConfigurationParameters;
+import com.linkedin.kafka.cruisecontrol.servlet.parameters.RightsizeParameters;
 import org.apache.kafka.common.config.ConfigDef;
 
 

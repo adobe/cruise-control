@@ -1,9 +1,12 @@
+/*
+ * Copyright 2018 LinkedIn Corp. Licensed under the BSD 2-Clause License (the "License"). See License in the project root for license information.
+ */
+
 package com.linkedin.kafka.cruisecontrol.servlet.handler.async;
 
 import com.linkedin.kafka.cruisecontrol.servlet.handler.async.runnable.OperationFuture;
 import com.linkedin.kafka.cruisecontrol.servlet.handler.async.runnable.RemoveDisksRunnable;
 import com.linkedin.kafka.cruisecontrol.servlet.parameters.RemoveDisksParameters;
-
 import java.util.Map;
 
 import static com.linkedin.cruisecontrol.common.utils.Utils.validateNotNull;

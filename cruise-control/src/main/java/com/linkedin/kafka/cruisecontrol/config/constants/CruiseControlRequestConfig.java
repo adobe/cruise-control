@@ -4,7 +4,17 @@
 
 package com.linkedin.kafka.cruisecontrol.config.constants;
 
-import com.linkedin.kafka.cruisecontrol.servlet.handler.async.*;
+import com.linkedin.kafka.cruisecontrol.servlet.handler.async.ClusterLoadRequest;
+import com.linkedin.kafka.cruisecontrol.servlet.handler.async.PartitionLoadRequest;
+import com.linkedin.kafka.cruisecontrol.servlet.handler.async.ProposalsRequest;
+import com.linkedin.kafka.cruisecontrol.servlet.handler.async.CruiseControlStateRequest;
+import com.linkedin.kafka.cruisecontrol.servlet.handler.async.TopicConfigurationRequest;
+import com.linkedin.kafka.cruisecontrol.servlet.handler.async.AddBrokerRequest;
+import com.linkedin.kafka.cruisecontrol.servlet.handler.async.RemoveBrokerRequest;
+import com.linkedin.kafka.cruisecontrol.servlet.handler.async.RemoveDisksRequest;
+import com.linkedin.kafka.cruisecontrol.servlet.handler.async.DemoteRequest;
+import com.linkedin.kafka.cruisecontrol.servlet.handler.async.RebalanceRequest;
+import com.linkedin.kafka.cruisecontrol.servlet.handler.async.FixOfflineReplicasRequest;
 import com.linkedin.kafka.cruisecontrol.servlet.handler.sync.RightsizeRequest;
 import com.linkedin.kafka.cruisecontrol.servlet.handler.sync.AdminRequest;
 import com.linkedin.kafka.cruisecontrol.servlet.handler.sync.BootstrapRequest;

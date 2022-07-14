@@ -1,3 +1,7 @@
+/*
+ * Copyright 2018 LinkedIn Corp. Licensed under the BSD 2-Clause License (the "License"). See License in the project root for license information.
+ */
+
 package com.linkedin.kafka.cruisecontrol.servlet.handler.async.runnable;
 
 import com.linkedin.cruisecontrol.exception.NotEnoughValidWindowsException;
@@ -14,8 +18,12 @@ import com.linkedin.kafka.cruisecontrol.servlet.parameters.RemoveDisksParameters
 import com.linkedin.kafka.cruisecontrol.servlet.response.OptimizationResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.*;
+import java.util.Set;
+import java.util.Map;
+import java.util.List;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.ArrayList;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 
