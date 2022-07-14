@@ -66,7 +66,6 @@ public class DiskRemovalGoal implements Goal {
             while (!logDirs.isEmpty()) {
                 String logDirToRemove = (String) logDirs.toArray()[0];
 
-                currentBroker.disk(logDirToRemove).setState(Disk.State.DEMOTED);
                 Set<Replica> replicasToMove = currentBroker.disk(logDirToRemove).replicas();
                 while (!replicasToMove.isEmpty()) {
                     Replica replica = (Replica) replicasToMove.toArray()[0];
