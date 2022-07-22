@@ -20,12 +20,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.util.Set;
 import java.util.Map;
-import java.util.List;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.ArrayList;
 import java.util.concurrent.TimeoutException;
-import java.util.function.Supplier;
 
 import static com.linkedin.kafka.cruisecontrol.servlet.handler.async.runnable.RunnableUtils.*;
 import static com.linkedin.kafka.cruisecontrol.servlet.parameters.ParameterUtils.DEFAULT_START_TIME_FOR_CLUSTER_MODEL;
@@ -33,22 +31,6 @@ import static com.linkedin.kafka.cruisecontrol.servlet.parameters.ParameterUtils
 public class RemoveDisksRunnable extends GoalBasedOperationRunnable {
     private static final Logger LOG = LoggerFactory.getLogger(RemoveDisksRunnable.class);
     protected final Map<Integer, Set<String>> _brokerIdAndLogdirs;
-
-    /**
-     * Constructor to be used for creating a runnable for self-healing.
-     */
-    public RemoveDisksRunnable(KafkaCruiseControl kafkaCruiseControl,
-                               List<String> selfHealingGoals,
-                               boolean allowCapacityEstimation,
-                               boolean excludeRecentlyDemotedBrokers,
-                               boolean excludeRecentlyRemovedBrokers,
-                               String anomalyId,
-                               Supplier<String> reasonSupplier,
-                               boolean stopOngoingExecution) {
-        super(kafkaCruiseControl, new OperationFuture("Broker Removal for Self-Healing"), selfHealingGoals, allowCapacityEstimation,
-                excludeRecentlyDemotedBrokers, excludeRecentlyRemovedBrokers, anomalyId, reasonSupplier, stopOngoingExecution);
-        _brokerIdAndLogdirs = Collections.emptyMap();
-    }
 
     public RemoveDisksRunnable(KafkaCruiseControl kafkaCruiseControl,
                                OperationFuture future,

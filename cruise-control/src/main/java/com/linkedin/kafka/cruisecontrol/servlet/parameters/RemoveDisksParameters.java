@@ -24,7 +24,6 @@ public class RemoveDisksParameters extends GoalBasedOptimizationParameters {
         validParameterNames.add(REASON_PARAM);
         validParameterNames.add(SKIP_HARD_GOAL_CHECK_PARAM);
         validParameterNames.add(STOP_ONGOING_EXECUTION_PARAM);
-        validParameterNames.addAll(GoalBasedOptimizationParameters.CASE_INSENSITIVE_PARAMETER_NAMES);
         CASE_INSENSITIVE_PARAMETER_NAMES = Collections.unmodifiableSortedSet(validParameterNames);
     }
     protected boolean _dryRun;

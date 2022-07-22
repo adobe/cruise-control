@@ -9,32 +9,12 @@ RemoveDisksEndpoint:
         schema:
           type: boolean
           default: true
-      - name: goals
-        in: query
-        description: List of goals used to generate proposal, the default goals will be used if this parameter is not specified.
-        schema:
-          type: array
-          items:
-            type: string
-          example: ["RackAwareGoal", "ReplicaCapacityGoal", "ReplicaDistributionGoal"]
-      - name: allow_capacity_estimation
-        in: query
-        description: Whether to allow capacity estimation when cruise-control is unable to obtain all per-broker capacity information.
-        schema:
-          type: boolean
-          default: false
       - name: stop_ongoing_execution
         in: query
         description: Whether to stop the ongoing execution (if any) and start executing the given request.
         schema:
           type: boolean
           default: false
-      - name: fast_mode
-        in: query
-        description: True to compute proposals in fast mode, false otherwise
-        schema:
-          type: boolean
-          default: true
       - name: reason
         in: query
         description: Reason for request.
@@ -50,63 +30,10 @@ RemoveDisksEndpoint:
             type: array
             items:
               type: string
-      - name: data_from
-        in: query
-        description: Whether to calculate proposal from available valid partitions or valid windows.
-        schema:
-          type: string
-          default: VALID_WINDOWS
-      - name: doAs
-        in: query
-        description: The user specified by a trusted proxy in that authentication model.
-        schema:
-          type: string
-      - name: exclude_recently_demoted_brokers
-        in: query
-        description: Whether to allow leader replicas to be moved to recently demoted brokers.
-        schema:
-          type: boolean
-          default: false
-      - name: exclude_recently_removed_brokers
-        in: query
-        description: Whether to allow replicas to be moved to recently removed broker.
-        schema:
-          type: boolean
-          default: true
-      - name: excluded_topics
-        in: query
-        description: Specify topic whose partition is excluded from replica movement.
-        schema:
-          type: string # topics regex
-          default: null
-          example: "__CruiseControl.%2A"
-      - name: get_response_schema
-        in: query
-        description: Whether to return JSON schema in response header or not.
-        schema:
-          type: boolean
-          default: false
-      - name: json
-        in: query
-        description: Whether to return in JSON format or not.
-        schema:
-          type: boolean
-          default: false
+        required: true
       - name: skip_hard_goal_check
         in: query
         description: Whether to allow hard goals be skipped in proposal generation.
-        schema:
-          type: boolean
-          default: false
-      - name: use_ready_default_goals
-        in: query
-        description: Whether to only use ready goals to generate proposal.
-        schema:
-          type: boolean
-          default: false
-      - name: verbose
-        in: query
-        description: Return detailed state information.
         schema:
           type: boolean
           default: false
