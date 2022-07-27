@@ -24,6 +24,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.ArrayList;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.Collectors;
 
 import static com.linkedin.kafka.cruisecontrol.servlet.handler.async.runnable.RunnableUtils.*;
 import static com.linkedin.kafka.cruisecontrol.servlet.parameters.ParameterUtils.DEFAULT_START_TIME_FOR_CLUSTER_MODEL;
@@ -114,6 +115,10 @@ public class RemoveDisksRunnable extends GoalBasedOperationRunnable {
             Integer brokerId = entry.getKey();
             Set<String> logDirs = entry.getValue();
             Broker broker = clusterModel.broker(brokerId);
+            Set<String> brokerLogDirs = broker.disks().stream().map(Disk::logDir).collect(Collectors.toSet());
+            if (brokerLogDirs.containsAll(logDirs)) {
+                throw new IllegalArgumentException(String.format("Invalid log dirs provided for broker %d.", brokerId));
+            }
             if (broker.disks().size() < logDirs.size()) {
                 throw new IllegalArgumentException(String.format("Invalid log dirs provided for broker %d.", brokerId));
             } else if (broker.disks().size() == logDirs.size()) {
