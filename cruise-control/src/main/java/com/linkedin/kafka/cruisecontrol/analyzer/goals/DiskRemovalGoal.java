@@ -57,29 +57,28 @@ public class DiskRemovalGoal implements Goal {
 
         for (Map.Entry<Integer, Set<String>> brokerIdLogDirs : _brokerIdAndLogdirs.entrySet()) {
             Integer brokerId = brokerIdLogDirs.getKey();
-            Set<String> logDirs = brokerIdLogDirs.getValue();
-
-            Broker currentBroker = clusterModel.broker(brokerId);
-            List<Disk> remainingDisks = new ArrayList<>();
-            currentBroker.disks().stream().filter(disk -> !logDirs.contains(disk.logDir())).forEach(remainingDisks::add);
-
-            int step = 0;
-            int size = remainingDisks.size();
-            while (!logDirs.isEmpty()) {
-                String logDirToRemove = (String) logDirs.toArray()[0];
-
-                Set<Replica> replicasToMove = currentBroker.disk(logDirToRemove).replicas();
-                while (!replicasToMove.isEmpty()) {
-                    Replica replica = (Replica) replicasToMove.toArray()[0];
-                    clusterModel.relocateReplica(replica.topicPartition(), brokerId, remainingDisks.get(step % size).logDir());
-                }
-
-                logDirs.remove(logDirToRemove);
-                step++;
-            }
+            Set<String> logDirsToRemove = brokerIdLogDirs.getValue();
+            relocateBrokerLogDirs(clusterModel, brokerId, logDirsToRemove);
         }
 
         return true;
+    }
+
+    private void relocateBrokerLogDirs(ClusterModel clusterModel, Integer brokerId, Set<String> logDirsToRemove) {
+        Broker currentBroker = clusterModel.broker(brokerId);
+        List<Disk> remainingDisks = new ArrayList<>();
+        currentBroker.disks().stream().filter(disk -> !logDirsToRemove.contains(disk.logDir())).forEach(remainingDisks::add);
+
+        int removedLogDirsCount = 0;
+        int remainingDisksNumber = remainingDisks.size();
+        for (String logDirToRemove : logDirsToRemove) {
+            Set<Replica> replicasToMove = currentBroker.disk(logDirToRemove).replicas();
+            while (!replicasToMove.isEmpty()) {
+                Replica replica = (Replica) replicasToMove.toArray()[0];
+                clusterModel.relocateReplica(replica.topicPartition(), brokerId, remainingDisks.get(removedLogDirsCount % remainingDisksNumber).logDir());
+            }
+            removedLogDirsCount++;
+        }
     }
 
     @Override
