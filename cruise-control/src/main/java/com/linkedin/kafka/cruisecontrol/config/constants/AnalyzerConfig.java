@@ -406,6 +406,15 @@ public final class AnalyzerConfig {
       + "Users can run goal optimizations in fast mode by setting the fast_mode parameter to true in relevant endpoints. "
       + "This mode intends to provide a more predictable runtime for goal optimizations.";
 
+  /**
+   * <code>remove.disks.remaining.size.error.margin</code>
+   */
+  public static final String REMOVE_DISKS_REMAINING_SIZE_ERROR_MARGIN = "remove.disks.remaining.size.error.margin";
+  public static final double DEFAULT_REMOVE_DISKS_REMAINING_SIZE_ERROR_MARGIN = 0.1;
+  public static final String REMOVE_DISKS_REMAINING_SIZE_ERROR_MARGIN_DOC = "The margin of error between the remaining and the "
+      + "removed disk sizes. The ratio between the removed and the remaining size should be greater than this parameter. The minimum "
+      + "value is 0.05 (5%).";
+
   private AnalyzerConfig() {
   }
 
@@ -623,6 +632,12 @@ public final class AnalyzerConfig {
                             DEFAULT_FAST_MODE_PER_BROKER_MOVE_TIMEOUT_MS,
                             atLeast(1),
                             ConfigDef.Importance.LOW,
-                            FAST_MODE_PER_BROKER_MOVE_TIMEOUT_MS_DOC);
+                            FAST_MODE_PER_BROKER_MOVE_TIMEOUT_MS_DOC)
+                    .define(REMOVE_DISKS_REMAINING_SIZE_ERROR_MARGIN,
+                            ConfigDef.Type.DOUBLE,
+                            DEFAULT_REMOVE_DISKS_REMAINING_SIZE_ERROR_MARGIN,
+                            atLeast(0.05),
+                            ConfigDef.Importance.LOW,
+                            REMOVE_DISKS_REMAINING_SIZE_ERROR_MARGIN_DOC);
   }
 }

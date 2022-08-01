@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
+import static com.linkedin.kafka.cruisecontrol.config.constants.AnalyzerConfig.REMOVE_DISKS_REMAINING_SIZE_ERROR_MARGIN;
 import static com.linkedin.kafka.cruisecontrol.servlet.handler.async.runnable.RunnableUtils.*;
 import static com.linkedin.kafka.cruisecontrol.servlet.parameters.ParameterUtils.DEFAULT_START_TIME_FOR_CLUSTER_MODEL;
 
@@ -116,7 +117,7 @@ public class RemoveDisksRunnable extends GoalBasedOperationRunnable {
             Set<String> logDirs = entry.getValue();
             Broker broker = clusterModel.broker(brokerId);
             Set<String> brokerLogDirs = broker.disks().stream().map(Disk::logDir).collect(Collectors.toSet());
-            if (brokerLogDirs.containsAll(logDirs)) {
+            if (!brokerLogDirs.containsAll(logDirs)) {
                 throw new IllegalArgumentException(String.format("Invalid log dirs provided for broker %d.", brokerId));
             }
             if (broker.disks().size() < logDirs.size()) {
@@ -134,7 +135,8 @@ public class RemoveDisksRunnable extends GoalBasedOperationRunnable {
                     remainingCapacity += disk.capacity();
                 }
             }
-            if (removedCapacity > remainingCapacity) {
+            double errorMargin = (double) _kafkaCruiseControl.config().mergedConfigValues().get(REMOVE_DISKS_REMAINING_SIZE_ERROR_MARGIN);
+            if (removedCapacity / remainingCapacity > (1 - errorMargin)) {
                 throw new IllegalArgumentException("Not enough remaining capacity to move replicas to.");
             }
         }
