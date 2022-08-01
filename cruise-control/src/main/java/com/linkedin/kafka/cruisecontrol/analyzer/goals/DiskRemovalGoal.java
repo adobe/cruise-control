@@ -75,7 +75,11 @@ public class DiskRemovalGoal implements Goal {
             Set<Replica> replicasToMove = currentBroker.disk(logDirToRemove).replicas();
             while (!replicasToMove.isEmpty()) {
                 Replica replica = (Replica) replicasToMove.toArray()[0];
-                clusterModel.relocateReplica(replica.topicPartition(), brokerId, remainingDisks.get(removedLogDirsCount % remainingDisksNumber).logDir());
+                clusterModel.relocateReplica(
+                        replica.topicPartition(),
+                        brokerId,
+                        remainingDisks.get(removedLogDirsCount % remainingDisksNumber).logDir()
+                );
             }
             removedLogDirsCount++;
         }
