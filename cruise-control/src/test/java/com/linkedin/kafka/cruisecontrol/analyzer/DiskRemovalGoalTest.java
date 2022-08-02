@@ -15,12 +15,12 @@ import com.linkedin.kafka.cruisecontrol.monitor.ModelGeneration;
 import com.linkedin.kafka.cruisecontrol.monitor.metricdefinition.KafkaMetricDef;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.Test;
-import java.util.Collections;
-import java.util.Arrays;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.Arrays;
+import java.util.Collections;
 
 import static com.linkedin.kafka.cruisecontrol.common.TestConstants.*;
 import static com.linkedin.kafka.cruisecontrol.config.constants.AnalyzerConfig.DEFAULT_REMOVE_DISKS_REMAINING_SIZE_ERROR_MARGIN;
@@ -32,7 +32,7 @@ public class DiskRemovalGoalTest {
 
     @Test
     public void testMoveReplicasToAnotherLogDir() {
-        ClusterModel clusterModel = createClusterModel();
+        ClusterModel clusterModel = createClusterModel(false);
         Map<Integer, Set<String>> brokerIdAndLogDirs = new HashMap<>();
         brokerIdAndLogDirs.put(0, new HashSet<>(Arrays.asList(LOGDIR0)));
 
@@ -48,7 +48,25 @@ public class DiskRemovalGoalTest {
         assertEquals(clusterModel.broker(0).disk(LOGDIR0).replicas().size(), 0);
     }
 
-    private ClusterModel createClusterModel() {
+    @Test
+    public void testReplicaStaysIfDiskUtilizationIsHigh() {
+        ClusterModel clusterModel = createClusterModel(true);
+        Map<Integer, Set<String>> brokerIdAndLogDirs = new HashMap<>();
+        brokerIdAndLogDirs.put(0, new HashSet<>(Arrays.asList(LOGDIR0)));
+
+        DiskRemovalGoal goal = new DiskRemovalGoal(brokerIdAndLogDirs, DEFAULT_REMOVE_DISKS_REMAINING_SIZE_ERROR_MARGIN);
+        // Before the optimization, goals are expected to be undecided wrt their provision status.
+        assertEquals(ProvisionStatus.UNDECIDED, goal.provisionResponse().status());
+        goal.optimize(clusterModel, Collections.emptySet(), new OptimizationOptions(Collections.emptySet(),
+                Collections.emptySet(),
+                Collections.emptySet()));
+        // After the optimization, PreferredLeaderElectionGoal is expected to be undecided wrt its provision status.
+        assertEquals(ProvisionStatus.UNDECIDED, goal.provisionResponse().status());
+
+        assertEquals(clusterModel.broker(0).disk(LOGDIR0).replicas().size(), 1);
+    }
+
+    private ClusterModel createClusterModel(boolean hasHighDiskUsage) {
         boolean populateDiskInfo = true;
         String rack = "r0";
         String host = "h0";
@@ -65,8 +83,8 @@ public class DiskRemovalGoalTest {
                 TestConstants.DISK_CAPACITY);
         clusterModel.createBroker(rack, host, brokerId, commonBrokerCapacityInfo, populateDiskInfo);
 
-        createReplicaAndSetLoad(clusterModel, rack, brokerId, LOGDIR0, T0P0, index, true);
-        createReplicaAndSetLoad(clusterModel, rack, brokerId, LOGDIR1, T0P1, index, false);
+        createReplicaAndSetLoad(clusterModel, rack, brokerId, LOGDIR0, T0P0, index, true, hasHighDiskUsage);
+        createReplicaAndSetLoad(clusterModel, rack, brokerId, LOGDIR1, T0P1, index, false, hasHighDiskUsage);
         return clusterModel;
     }
 
@@ -76,13 +94,22 @@ public class DiskRemovalGoalTest {
                                          String logdir,
                                          TopicPartition tp,
                                          int index,
-                                         boolean isLeader) {
+                                         boolean isLeader,
+                                         boolean hasHighDiskUsage) {
         clusterModel.createReplica(rack, brokerId, tp, index, isLeader, false, logdir, false);
-        MetricValues metricValues = new MetricValues(1);
+        MetricValues defaultMetricValues = new MetricValues(1);
+        MetricValues diskMetricValues = new MetricValues(1);
+        double diskUsage = hasHighDiskUsage ? 0.8 : 0.3;
+        double[] diskMetric = {DISK_CAPACITY.get(logdir) * diskUsage};
+        diskMetricValues.add(diskMetric);
         Map<Short, MetricValues> metricValuesByResource = new HashMap<>();
         Resource.cachedValues().forEach(r -> {
             for (short id : KafkaMetricDef.resourceToMetricIds(r)) {
-                metricValuesByResource.put(id, metricValues);
+                if (r.equals(Resource.DISK)) {
+                    metricValuesByResource.put(id, diskMetricValues);
+                } else {
+                    metricValuesByResource.put(id, defaultMetricValues);
+                }
             }
         });
         clusterModel.setReplicaLoad(rack, brokerId, tp, new AggregatedMetricValues(metricValuesByResource),
