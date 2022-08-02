@@ -76,13 +76,25 @@ public class DiskRemovalGoal implements Goal {
 
         for (String logDirToRemove : logDirsToRemove) {
             Set<Replica> replicasToMove = currentBroker.disk(logDirToRemove).replicas();
-            while (!replicasToMove.isEmpty()) {
+            for (int i = 0; i < replicasToMove.size(); i++) {
                 Replica replica = replicasToMove.iterator().next();
-                for (Disk disk : remainingDisks) {
-                    if (isEnoughSpace(disk, replica)) {
-                        clusterModel.relocateReplica(replica.topicPartition(), brokerId, disk.logDir());
-                    }
-                }
+                relocateReplicaIfPossible(clusterModel, brokerId, remainingDisks, replica);
+                LOG.info(String.format("Could not move replica %s to any of the remaining disks.", replica));
+            }
+        }
+    }
+
+    /**
+     * This methods relocates the given replica on one of the candidate disks if there is enough space on any of them
+     * @param clusterModel the cluster model
+     * @param brokerId the broker id where the replica movement occurs
+     * @param remainingDisks the candidate disks on which to move the replica
+     * @param replica the replica to move
+     */
+    private void relocateReplicaIfPossible(ClusterModel clusterModel, Integer brokerId, List<Disk> remainingDisks, Replica replica) {
+        for (Disk disk : remainingDisks) {
+            if (isEnoughSpace(disk, replica)) {
+                clusterModel.relocateReplica(replica.topicPartition(), brokerId, disk.logDir());
             }
         }
     }
