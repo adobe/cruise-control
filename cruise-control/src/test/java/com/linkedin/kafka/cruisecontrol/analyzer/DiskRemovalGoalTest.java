@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.HashMap;
 
 import static com.linkedin.kafka.cruisecontrol.common.TestConstants.*;
+import static com.linkedin.kafka.cruisecontrol.config.constants.AnalyzerConfig.DEFAULT_REMOVE_DISKS_REMAINING_SIZE_ERROR_MARGIN;
 import static org.junit.Assert.assertEquals;
 
 public class DiskRemovalGoalTest {
@@ -35,7 +36,7 @@ public class DiskRemovalGoalTest {
         Map<Integer, Set<String>> brokerIdAndLogDirs = new HashMap<>();
         brokerIdAndLogDirs.put(0, new HashSet<>(Arrays.asList(LOGDIR0)));
 
-        DiskRemovalGoal goal = new DiskRemovalGoal(brokerIdAndLogDirs);
+        DiskRemovalGoal goal = new DiskRemovalGoal(brokerIdAndLogDirs, DEFAULT_REMOVE_DISKS_REMAINING_SIZE_ERROR_MARGIN);
         // Before the optimization, goals are expected to be undecided wrt their provision status.
         assertEquals(ProvisionStatus.UNDECIDED, goal.provisionResponse().status());
         goal.optimize(clusterModel, Collections.emptySet(), new OptimizationOptions(Collections.emptySet(),

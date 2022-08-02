@@ -9,6 +9,7 @@ import com.linkedin.kafka.cruisecontrol.analyzer.ActionAcceptance;
 import com.linkedin.kafka.cruisecontrol.analyzer.BalancingAction;
 import com.linkedin.kafka.cruisecontrol.analyzer.ProvisionResponse;
 import com.linkedin.kafka.cruisecontrol.analyzer.ProvisionStatus;
+import com.linkedin.kafka.cruisecontrol.common.Resource;
 import com.linkedin.kafka.cruisecontrol.model.Broker;
 import com.linkedin.kafka.cruisecontrol.model.ClusterModel;
 import com.linkedin.kafka.cruisecontrol.model.ClusterModelStats;
@@ -17,7 +18,6 @@ import com.linkedin.kafka.cruisecontrol.model.Replica;
 import com.linkedin.kafka.cruisecontrol.monitor.ModelCompletenessRequirements;
 import java.util.Set;
 import java.util.Map;
-import java.util.Collections;
 import java.util.List;
 import java.util.ArrayList;
 import org.slf4j.Logger;
@@ -36,13 +36,12 @@ public class DiskRemovalGoal implements Goal {
 
     protected final Map<Integer, Set<String>> _brokerIdAndLogdirs;
 
-    public DiskRemovalGoal() {
-        this(Collections.emptyMap());
-    }
+    protected final double _errorMargin;
 
-    public DiskRemovalGoal(Map<Integer, Set<String>> brokerIdAndLogdirs) {
+    public DiskRemovalGoal(Map<Integer, Set<String>> brokerIdAndLogdirs, double errorMargin) {
         _provisionResponse = new ProvisionResponse(ProvisionStatus.UNDECIDED);
         _brokerIdAndLogdirs = brokerIdAndLogdirs;
+        _errorMargin = errorMargin;
     }
 
     private void sanityCheckOptimizationOptions(OptimizationOptions optimizationOptions) {
@@ -64,25 +63,40 @@ public class DiskRemovalGoal implements Goal {
         return true;
     }
 
+    /**
+     * This method relocates the replicas on the provided log dirs to other log dirs of the same broker.
+     * @param clusterModel the cluster model
+     * @param brokerId the id of the broker where the movement will take place
+     * @param logDirsToRemove the set of log dirs to be removed from the broker
+     */
     private void relocateBrokerLogDirs(ClusterModel clusterModel, Integer brokerId, Set<String> logDirsToRemove) {
         Broker currentBroker = clusterModel.broker(brokerId);
         List<Disk> remainingDisks = new ArrayList<>();
         currentBroker.disks().stream().filter(disk -> !logDirsToRemove.contains(disk.logDir())).forEach(remainingDisks::add);
 
-        int removedLogDirsCount = 0;
-        int remainingDisksNumber = remainingDisks.size();
         for (String logDirToRemove : logDirsToRemove) {
             Set<Replica> replicasToMove = currentBroker.disk(logDirToRemove).replicas();
             while (!replicasToMove.isEmpty()) {
-                Replica replica = (Replica) replicasToMove.toArray()[0];
-                clusterModel.relocateReplica(
-                        replica.topicPartition(),
-                        brokerId,
-                        remainingDisks.get(removedLogDirsCount % remainingDisksNumber).logDir()
-                );
+                Replica replica = replicasToMove.iterator().next();
+                for (Disk disk : remainingDisks) {
+                    if (isEnoughSpace(disk, replica)) {
+                        clusterModel.relocateReplica(replica.topicPartition(), brokerId, disk.logDir());
+                    }
+                }
             }
-            removedLogDirsCount++;
         }
+    }
+
+    /**
+     * This method checks if the usage on the disk that the replica will be moved to is lower than the disk capacity
+     * including the error margin.
+     * @param disk the disk on which the replica can be moved
+     * @param replica the replica to move
+     * @return boolean which reflects if there is enough disk space to move the replica
+     */
+    private boolean isEnoughSpace(Disk disk, Replica replica) {
+        double futureUsage = disk.utilization() + replica.load().expectedUtilizationFor(Resource.DISK);
+        return (1 - (futureUsage / disk.capacity())) >= _errorMargin;
     }
 
     @Override

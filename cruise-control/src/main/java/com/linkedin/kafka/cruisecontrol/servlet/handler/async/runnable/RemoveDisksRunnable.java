@@ -34,6 +34,8 @@ public class RemoveDisksRunnable extends GoalBasedOperationRunnable {
     private static final Logger LOG = LoggerFactory.getLogger(RemoveDisksRunnable.class);
     protected final Map<Integer, Set<String>> _brokerIdAndLogdirs;
 
+    protected final double _errorMargin;
+
     public RemoveDisksRunnable(KafkaCruiseControl kafkaCruiseControl,
                                OperationFuture future,
                                RemoveDisksParameters parameters,
@@ -41,6 +43,7 @@ public class RemoveDisksRunnable extends GoalBasedOperationRunnable {
         super(kafkaCruiseControl, future, parameters, parameters.dryRun(), parameters.stopOngoingExecution(), parameters.skipHardGoalCheck(),
                 uuid, parameters::reason);
         _brokerIdAndLogdirs = parameters.brokerIdAndLogdirs();
+        _errorMargin = (double) _kafkaCruiseControl.config().mergedConfigValues().get(REMOVE_DISKS_REMAINING_SIZE_ERROR_MARGIN);
     }
 
     @Override
@@ -52,7 +55,7 @@ public class RemoveDisksRunnable extends GoalBasedOperationRunnable {
     protected void init() {
         _kafkaCruiseControl.sanityCheckDryRun(_dryRun, _stopOngoingExecution);
         _goalsByPriority = new ArrayList<>(1);
-        _goalsByPriority.add(new DiskRemovalGoal(_brokerIdAndLogdirs));
+        _goalsByPriority.add(new DiskRemovalGoal(_brokerIdAndLogdirs, _errorMargin));
 
         _operationProgress = _future.operationProgress();
         if (_stopOngoingExecution) {
@@ -121,22 +124,24 @@ public class RemoveDisksRunnable extends GoalBasedOperationRunnable {
                 throw new IllegalArgumentException(String.format("Invalid log dirs provided for broker %d.", brokerId));
             }
             if (broker.disks().size() < logDirs.size()) {
-                throw new IllegalArgumentException(String.format("Invalid log dirs provided for broker %d.", brokerId));
+                throw new IllegalArgumentException(String.format("Too many log dirs provided for broker %d.", brokerId));
             } else if (broker.disks().size() == logDirs.size()) {
                 throw new IllegalArgumentException(String.format("No log dir remaining to move replicas to for broker %d.", brokerId));
             }
 
-            double removedCapacity = 0.0;
+            double removedUsage = 0.0;
             double remainingCapacity = 0.0;
+            double currentUsage = 0.0;
             for (Disk disk : broker.disks()) {
                 if (logDirs.contains(disk.logDir())) {
-                    removedCapacity += disk.capacity();
+                    removedUsage += disk.utilization();
                 } else {
                     remainingCapacity += disk.capacity();
+                    currentUsage += disk.utilization();
                 }
             }
-            double errorMargin = (double) _kafkaCruiseControl.config().mergedConfigValues().get(REMOVE_DISKS_REMAINING_SIZE_ERROR_MARGIN);
-            if (removedCapacity / remainingCapacity > (1 - errorMargin)) {
+            double futureUsage = removedUsage + currentUsage;
+            if ((1 - (futureUsage / remainingCapacity)) < _errorMargin) {
                 throw new IllegalArgumentException("Not enough remaining capacity to move replicas to.");
             }
         }
