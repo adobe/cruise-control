@@ -20,6 +20,7 @@ import java.util.Set;
 import java.util.Map;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Comparator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,10 +33,10 @@ import static com.linkedin.kafka.cruisecontrol.analyzer.goals.GoalUtils.MIN_NUM_
  */
 public class DiskRemovalGoal implements Goal {
     private static final Logger LOG = LoggerFactory.getLogger(DiskRemovalGoal.class);
+    private static final Double EPSILON = 0.0001;
+
     private final ProvisionResponse _provisionResponse;
-
     protected final Map<Integer, Set<String>> _brokerIdAndLogdirs;
-
     protected final double _errorMargin;
 
     public DiskRemovalGoal(Map<Integer, Set<String>> brokerIdAndLogdirs, double errorMargin) {
@@ -65,50 +66,80 @@ public class DiskRemovalGoal implements Goal {
 
     /**
      * This method relocates the replicas on the provided log dirs to other log dirs of the same broker.
-     * @param clusterModel the cluster model
-     * @param brokerId the id of the broker where the movement will take place
+     *
+     * @param clusterModel    the cluster model
+     * @param brokerId        the id of the broker where the movement will take place
      * @param logDirsToRemove the set of log dirs to be removed from the broker
      */
     private void relocateBrokerLogDirs(ClusterModel clusterModel, Integer brokerId, Set<String> logDirsToRemove) {
         Broker currentBroker = clusterModel.broker(brokerId);
         List<Disk> remainingDisks = new ArrayList<>();
         currentBroker.disks().stream().filter(disk -> !logDirsToRemove.contains(disk.logDir())).forEach(remainingDisks::add);
+        remainingDisks.sort(Comparator.comparing(Disk::logDir));
+        List<Replica> replicasToMove = getReplicasToMoveAsListSortedBySizeDesc(currentBroker, logDirsToRemove);
 
-        for (String logDirToRemove : logDirsToRemove) {
-            Set<Replica> replicasToMove = currentBroker.disk(logDirToRemove).replicas();
-            for (int i = 0; i < replicasToMove.size(); i++) {
-                Replica replica = replicasToMove.iterator().next();
-                relocateReplicaIfPossible(clusterModel, brokerId, remainingDisks, replica);
-                LOG.info(String.format("Could not move replica %s to any of the remaining disks.", replica));
-            }
+        int usedDiskIdx = -1;
+        for (Replica replicaToMove : replicasToMove) {
+            usedDiskIdx = relocateReplicaIfPossible(clusterModel, brokerId, remainingDisks, replicaToMove, usedDiskIdx);
         }
     }
 
     /**
-     * This methods relocates the given replica on one of the candidate disks if there is enough space on any of them
-     * @param clusterModel the cluster model
-     * @param brokerId the broker id where the replica movement occurs
-     * @param remainingDisks the candidate disks on which to move the replica
-     * @param replica the replica to move
+     * This method provides the list of replicas to be moved sorted in descending order by the disk utilization.
+     *
+     * @param broker  the broker where the replicas are
+     * @param logDirs the log dirs where the replicas are
+     * @return the sorted list of replicas to be moved
      */
-    private void relocateReplicaIfPossible(ClusterModel clusterModel, Integer brokerId, List<Disk> remainingDisks, Replica replica) {
-        for (Disk disk : remainingDisks) {
-            if (isEnoughSpace(disk, replica)) {
-                clusterModel.relocateReplica(replica.topicPartition(), brokerId, disk.logDir());
-            }
+    private List<Replica> getReplicasToMoveAsListSortedBySizeDesc(Broker broker, Set<String> logDirs) {
+        List<Replica> replicasToMove = new ArrayList<>();
+        for (String logDir : logDirs) {
+            Set<Replica> logDirReplicas = broker.disk(logDir).replicas();
+            replicasToMove.addAll(logDirReplicas);
         }
+
+        replicasToMove.sort(Comparator.comparingDouble(o -> ((Replica) o).load().expectedUtilizationFor(Resource.DISK)).reversed());
+        return replicasToMove;
+    }
+
+    /**
+     * This method relocates the given replica on one of the candidate disks in a round-robin manner if there is enough space
+     *
+     * @param clusterModel   the cluster model
+     * @param brokerId       the broker id where the replica movement occurs
+     * @param remainingDisks the candidate disks on which to move the replica
+     * @param replica        the replica to move
+     * @param usedDiskIdx    the index of the last disk used to relocate replicas
+     * @return the index of the disk used to relocate the replica to
+     */
+    private int relocateReplicaIfPossible(ClusterModel clusterModel, Integer brokerId, List<Disk> remainingDisks, Replica replica, int usedDiskIdx) {
+        int remainingDisksNumber = remainingDisks.size();
+        int diskIndex = (usedDiskIdx + 1) % remainingDisksNumber;
+        for (int i = 0; i < remainingDisksNumber; i++) {
+            Disk destinationDisk = remainingDisks.get(diskIndex);
+            if (isEnoughSpace(destinationDisk, replica)) {
+                clusterModel.relocateReplica(replica.topicPartition(), brokerId, destinationDisk.logDir());
+                return diskIndex;
+            }
+            diskIndex = (diskIndex + 1) % remainingDisksNumber;
+        }
+        LOG.info("Could not move replica {} to any of the remaining disks.", replica);
+        return usedDiskIdx;
     }
 
     /**
      * This method checks if the usage on the disk that the replica will be moved to is lower than the disk capacity
      * including the error margin.
-     * @param disk the disk on which the replica can be moved
+     *
+     * @param disk    the disk on which the replica can be moved
      * @param replica the replica to move
      * @return boolean which reflects if there is enough disk space to move the replica
      */
     private boolean isEnoughSpace(Disk disk, Replica replica) {
         double futureUsage = disk.utilization() + replica.load().expectedUtilizationFor(Resource.DISK);
-        return (1 - (futureUsage / disk.capacity())) >= _errorMargin;
+        double remainingSpacePercentage = (1 - (futureUsage / disk.capacity()));
+        return remainingSpacePercentage > _errorMargin
+                || (remainingSpacePercentage > 0 && Math.abs(remainingSpacePercentage - _errorMargin) < EPSILON);
     }
 
     @Override

@@ -28,6 +28,8 @@ import static org.junit.Assert.assertEquals;
 public class DiskRemovalGoalTest {
     private static final TopicPartition T0P0 = new TopicPartition(TOPIC0, 0);
     private static final TopicPartition T0P1 = new TopicPartition(TOPIC0, 1);
+    private static final TopicPartition T0P2 = new TopicPartition(TOPIC0, 2);
+    private static final TopicPartition T0P3 = new TopicPartition(TOPIC0, 3);
     private static final boolean POPULATE_DISK_INFO = true;
     private static final String RACK = "r0";
     private static final String HOST = "h0";
@@ -35,12 +37,17 @@ public class DiskRemovalGoalTest {
     private static final int INDEX = 0;
     private static final double HIGH_DISK_USAGE = 0.8;
     private static final double LOW_DISK_USAGE = 0.3;
-    private static final double MEDIUM_DISK_USAGE = 0.5;
-    private static final double NO_DISK_USAGE = 0;
+    public static final String LOGDIR2 = "/mnt/i02";
+
+    private static final Map<String, Double> EXTENDED_DISK_CAPACITY = new HashMap<>(DISK_CAPACITY);
+
+    static {
+        EXTENDED_DISK_CAPACITY.put(LOGDIR2, TestConstants.LARGE_BROKER_CAPACITY / 2);
+    }
 
     @Test
-    public void testMoveReplicasToAnotherLogDir() {
-        ClusterModel clusterModel = createClusterModel();
+    public void testMoveReplicasToAnotherLogDirWithEnoughDiskSpace() {
+        ClusterModel clusterModel = createClusterModel(DISK_CAPACITY);
         createReplicaAndSetLoad(clusterModel, LOGDIR0, T0P0, true, LOW_DISK_USAGE);
         createReplicaAndSetLoad(clusterModel, LOGDIR1, T0P1, false, LOW_DISK_USAGE);
         Map<Integer, Set<String>> brokerIdAndLogDirs = new HashMap<>();
@@ -49,50 +56,12 @@ public class DiskRemovalGoalTest {
         runOptimization(clusterModel, brokerIdAndLogDirs);
 
         assertEquals(clusterModel.broker(0).disk(LOGDIR0).replicas().size(), 0);
-    }
-
-    @Test
-    public void testMoveReplicasToAlreadyUsedDisk() {
-        ClusterModel clusterModel = createClusterModel();
-        createReplicaAndSetLoad(clusterModel, LOGDIR0, T0P0, true, LOW_DISK_USAGE);
-        createReplicaAndSetLoad(clusterModel, LOGDIR1, T0P1, false, MEDIUM_DISK_USAGE);
-        Map<Integer, Set<String>> brokerIdAndLogDirs = new HashMap<>();
-        brokerIdAndLogDirs.put(0, new HashSet<>(Collections.singletonList(LOGDIR0)));
-
-        runOptimization(clusterModel, brokerIdAndLogDirs);
-
-        assertEquals(clusterModel.broker(0).disk(LOGDIR0).replicas().size(), 0);
-    }
-
-    @Test
-    public void testMoveLargeDiskToEmptyDisk() {
-        ClusterModel clusterModel = createClusterModel();
-        createReplicaAndSetLoad(clusterModel, LOGDIR0, T0P0, true, HIGH_DISK_USAGE);
-        createReplicaAndSetLoad(clusterModel, LOGDIR1, T0P1, false, NO_DISK_USAGE);
-        Map<Integer, Set<String>> brokerIdAndLogDirs = new HashMap<>();
-        brokerIdAndLogDirs.put(0, new HashSet<>(Collections.singletonList(LOGDIR0)));
-
-        runOptimization(clusterModel, brokerIdAndLogDirs);
-
-        assertEquals(clusterModel.broker(0).disk(LOGDIR0).replicas().size(), 0);
+        assertEquals(clusterModel.broker(0).disk(LOGDIR1).replicas().size(), 2);
     }
 
     @Test
     public void testReplicasStayIsDestinationHasInsufficientCapacity() {
-        ClusterModel clusterModel = createClusterModel();
-        createReplicaAndSetLoad(clusterModel, LOGDIR0, T0P0, true, MEDIUM_DISK_USAGE);
-        createReplicaAndSetLoad(clusterModel, LOGDIR1, T0P1, false, MEDIUM_DISK_USAGE);
-        Map<Integer, Set<String>> brokerIdAndLogDirs = new HashMap<>();
-        brokerIdAndLogDirs.put(0, new HashSet<>(Collections.singletonList(LOGDIR0)));
-
-        runOptimization(clusterModel, brokerIdAndLogDirs);
-
-        assertEquals(clusterModel.broker(0).disk(LOGDIR0).replicas().size(), 1);
-    }
-
-    @Test
-    public void testReplicasStayIfDiskAlmostFull() {
-        ClusterModel clusterModel = createClusterModel();
+        ClusterModel clusterModel = createClusterModel(DISK_CAPACITY);
         createReplicaAndSetLoad(clusterModel, LOGDIR0, T0P0, true, LOW_DISK_USAGE);
         createReplicaAndSetLoad(clusterModel, LOGDIR1, T0P1, false, HIGH_DISK_USAGE);
         Map<Integer, Set<String>> brokerIdAndLogDirs = new HashMap<>();
@@ -101,6 +70,41 @@ public class DiskRemovalGoalTest {
         runOptimization(clusterModel, brokerIdAndLogDirs);
 
         assertEquals(clusterModel.broker(0).disk(LOGDIR0).replicas().size(), 1);
+        assertEquals(clusterModel.broker(0).disk(LOGDIR1).replicas().size(), 1);
+    }
+
+    @Test
+    public void testMoveReplicasInARoundRobinMannerWithEnoughDiskSpace() {
+        ClusterModel clusterModel = createClusterModel(EXTENDED_DISK_CAPACITY);
+        createReplicaAndSetLoad(clusterModel, LOGDIR0, T0P0, true, LOW_DISK_USAGE);
+        createReplicaAndSetLoad(clusterModel, LOGDIR0, T0P3, true, LOW_DISK_USAGE);
+        createReplicaAndSetLoad(clusterModel, LOGDIR1, T0P1, false, LOW_DISK_USAGE);
+        createReplicaAndSetLoad(clusterModel, LOGDIR2, T0P2, false, LOW_DISK_USAGE);
+        Map<Integer, Set<String>> brokerIdAndLogDirs = new HashMap<>();
+        brokerIdAndLogDirs.put(0, new HashSet<>(Collections.singletonList(LOGDIR0)));
+
+        runOptimization(clusterModel, brokerIdAndLogDirs);
+
+        assertEquals(clusterModel.broker(0).disk(LOGDIR0).replicas().size(), 0);
+        assertEquals(clusterModel.broker(0).disk(LOGDIR1).replicas().size(), 2);
+        assertEquals(clusterModel.broker(0).disk(LOGDIR2).replicas().size(), 2);
+    }
+
+    @Test
+    public void testMoveReplicasInARoundRobinMannerWithNotEnoughDiskSpace() {
+        ClusterModel clusterModel = createClusterModel(EXTENDED_DISK_CAPACITY);
+        createReplicaAndSetLoad(clusterModel, LOGDIR0, T0P0, true, LOW_DISK_USAGE);
+        createReplicaAndSetLoad(clusterModel, LOGDIR0, T0P3, true, LOW_DISK_USAGE);
+        createReplicaAndSetLoad(clusterModel, LOGDIR1, T0P1, false, LOW_DISK_USAGE);
+        createReplicaAndSetLoad(clusterModel, LOGDIR2, T0P2, false, HIGH_DISK_USAGE);
+        Map<Integer, Set<String>> brokerIdAndLogDirs = new HashMap<>();
+        brokerIdAndLogDirs.put(0, new HashSet<>(Collections.singletonList(LOGDIR0)));
+
+        runOptimization(clusterModel, brokerIdAndLogDirs);
+
+        assertEquals(clusterModel.broker(0).disk(LOGDIR0).replicas().size(), 0);
+        assertEquals(clusterModel.broker(0).disk(LOGDIR1).replicas().size(), 3);
+        assertEquals(clusterModel.broker(0).disk(LOGDIR2).replicas().size(), 1);
     }
 
     private void runOptimization(ClusterModel clusterModel, Map<Integer, Set<String>> brokerIdAndLogDirs) {
@@ -114,10 +118,10 @@ public class DiskRemovalGoalTest {
         assertEquals(ProvisionStatus.UNDECIDED, goal.provisionResponse().status());
     }
 
-    private ClusterModel createClusterModel() {
+    private ClusterModel createClusterModel(Map<String, Double> diskCapacity) {
         ClusterModel clusterModel = new ClusterModel(new ModelGeneration(0, 0), 1.0);
         clusterModel.createRack(RACK);
-        BrokerCapacityInfo capacityInfo = new BrokerCapacityInfo(TestConstants.BROKER_CAPACITY, null, TestConstants.DISK_CAPACITY);
+        BrokerCapacityInfo capacityInfo = new BrokerCapacityInfo(TestConstants.BROKER_CAPACITY, null, diskCapacity);
         clusterModel.createBroker(RACK, HOST, BROKER_ID, capacityInfo, POPULATE_DISK_INFO);
         return clusterModel;
     }
@@ -130,7 +134,7 @@ public class DiskRemovalGoalTest {
         clusterModel.createReplica(RACK, BROKER_ID, tp, INDEX, isLeader, false, logdir, false);
         MetricValues defaultMetricValues = new MetricValues(1);
         MetricValues diskMetricValues = new MetricValues(1);
-        double[] diskMetric = {DISK_CAPACITY.get(logdir) * diskUsage};
+        double[] diskMetric = {EXTENDED_DISK_CAPACITY.get(logdir) * diskUsage};
         diskMetricValues.add(diskMetric);
         Map<Short, MetricValues> metricValuesByResource = new HashMap<>();
         Resource.cachedValues().forEach(r -> {
