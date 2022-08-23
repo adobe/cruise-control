@@ -1,7 +1,7 @@
 RemoveDisksEndpoint:
   post:
     operationId: removeDisks
-    summary: Move all replicas from the specified disk to another disk of the same broker.
+    summary: Move all replicas from the specified disk to other disks of the same broker.
     parameters:
       - name: dryrun
         in: query
