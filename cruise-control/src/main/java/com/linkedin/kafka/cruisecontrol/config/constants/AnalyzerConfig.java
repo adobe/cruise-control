@@ -448,6 +448,15 @@ public final class AnalyzerConfig {
       String.format("The class implements %s interface and is used to generate replica to broker set mapping.",
                     ReplicaToBrokerSetMappingPolicy.class.getName());
 
+  /**
+   * <code>remove.disks.remaining.size.error.margin</code>
+   */
+  public static final String REMOVE_DISKS_REMAINING_SIZE_ERROR_MARGIN = "remove.disks.remaining.size.error.margin";
+  public static final double DEFAULT_REMOVE_DISKS_REMAINING_SIZE_ERROR_MARGIN = 0.1;
+  public static final String REMOVE_DISKS_REMAINING_SIZE_ERROR_MARGIN_DOC = "The margin of error between the remaining and the "
+      + "removed disk sizes. The ratio between the removed and the remaining size should be greater than this parameter. The minimum "
+      + "value is 0.05 (5%).";
+
   private AnalyzerConfig() {
   }
 
@@ -683,6 +692,12 @@ public final class AnalyzerConfig {
                     .define(REPLICA_TO_BROKER_SET_MAPPING_POLICY_CLASS_CONFIG,
                             ConfigDef.Type.CLASS, DEFAULT_REPLICA_TO_BROKER_SET_MAPPING_POLICY_CLASS,
                             ConfigDef.Importance.LOW,
-                            REPLICA_TO_BROKER_SET_MAPPING_POLICY_CLASS_DOC);
+                            REPLICA_TO_BROKER_SET_MAPPING_POLICY_CLASS_DOC)
+                    .define(REMOVE_DISKS_REMAINING_SIZE_ERROR_MARGIN,
+                            ConfigDef.Type.DOUBLE,
+                            DEFAULT_REMOVE_DISKS_REMAINING_SIZE_ERROR_MARGIN,
+                            atLeast(0.05),
+                            ConfigDef.Importance.LOW,
+                            REMOVE_DISKS_REMAINING_SIZE_ERROR_MARGIN_DOC);
   }
 }
