@@ -46,3 +46,5 @@ paths:
     $ref: 'endpoints/train.yaml#/TrainEndpoint'
   /kafkacruisecontrol/user_tasks:
     $ref: 'endpoints/userTasks.yaml#/UserTasksEndpoint'
+  /kafkacruisecontrol/remove_disks:
+    $ref: 'endpoints/removeDisks.yaml#/RemoveDisksEndpoint'
