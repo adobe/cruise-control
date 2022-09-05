@@ -257,7 +257,7 @@ project(':cruise-control') {
   configurations {
     integrationTestImplementation.extendsFrom testImplementation
     integrationTestRuntime.extendsFrom testRuntime
-   }
+  }
 
   dependencies {
     configurations.all {
@@ -369,8 +369,8 @@ project(':cruise-control') {
     outputs.upToDateWhen { false }
     doLast {
       def data = [
-          commitId: commitId,
-          version: version,
+              commitId: commitId,
+              version: version,
       ]
 
       receiptFile.parentFile.mkdirs()
