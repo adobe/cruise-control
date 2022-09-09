@@ -14,6 +14,10 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.attribute.FileAttribute;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -48,6 +52,16 @@ public abstract class AbstractBrokerFailureDetector extends AbstractAnomalyDetec
     KafkaCruiseControlConfig config = _kafkaCruiseControl.config();
     _failedBrokers = new HashMap<>();
     _failedBrokersFile = new File(config.getString(AnomalyDetectorConfig.FAILED_BROKERS_FILE_PATH_CONFIG));
+
+    Set<PosixFilePermission> ownerWritableReadable = PosixFilePermissions.fromString("rw-------");
+    FileAttribute<?> permissions = PosixFilePermissions.asFileAttribute(ownerWritableReadable);
+    try {
+      Files.createFile(_failedBrokersFile.toPath(), permissions);
+    } catch (IOException e) {
+      LOG.warn("The creation of failed brokers file ({}) was unsuccessful:\n{}",
+              config.getString(AnomalyDetectorConfig.FAILED_BROKERS_FILE_PATH_CONFIG), e.getMessage());
+    }
+
     _fixableFailedBrokerCountThreshold = config.getShort(AnomalyDetectorConfig.FIXABLE_FAILED_BROKER_COUNT_THRESHOLD_CONFIG);
     _fixableFailedBrokerPercentageThreshold = config.getDouble(AnomalyDetectorConfig.FIXABLE_FAILED_BROKER_PERCENTAGE_THRESHOLD_CONFIG);
   }
