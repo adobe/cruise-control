@@ -41,6 +41,7 @@ import org.apache.kafka.clients.admin.DescribeLogDirsResult;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
 import org.apache.kafka.common.utils.MockTime;
@@ -63,7 +64,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import static kafka.log.LogConfig.CleanupPolicyProp;
 
 
 /**
@@ -566,7 +566,7 @@ public class LoadMonitorTest {
     props.put(MonitorConfig.MIN_SAMPLES_PER_PARTITION_METRICS_WINDOW_CONFIG,
               Integer.toString(MIN_SAMPLES_PER_WINDOW));
     props.put(MonitorConfig.PARTITION_METRICS_WINDOW_MS_CONFIG, Long.toString(WINDOW_MS));
-    props.put(CleanupPolicyProp(), DEFAULT_CLEANUP_POLICY);
+    props.put(TopicConfig.CLEANUP_POLICY_CONFIG, DEFAULT_CLEANUP_POLICY);
     props.put(MonitorConfig.SAMPLE_STORE_CLASS_CONFIG, NoopSampleStore.class.getName());
     props.put(MonitorConfig.SAMPLE_PARTITION_METRIC_STORE_ON_EXECUTION_CLASS_CONFIG, NoopSampleStore.class.getName());
     props.put(ExecutorConfig.ZOOKEEPER_SECURITY_ENABLED_CONFIG, "false");
