@@ -32,9 +32,9 @@ RemoveDisksEndpoint:
               type: string
         required: true
         example: 101-/tmp/kafka-logs-1,101-/tmp/kafka-logs-2
-      - name: skip_hard_goal_check
+      - name: json
         in: query
-        description: Whether to allow hard goals be skipped in proposal generation.
+        description: Whether to return in JSON format or not.
         schema:
           type: boolean
           default: false
