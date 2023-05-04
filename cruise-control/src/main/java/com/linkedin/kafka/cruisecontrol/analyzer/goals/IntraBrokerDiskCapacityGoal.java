@@ -43,12 +43,22 @@ public class IntraBrokerDiskCapacityGoal extends AbstractGoal {
   private static final Logger LOG = LoggerFactory.getLogger(IntraBrokerDiskCapacityGoal.class);
   private static final int MIN_NUM_VALID_WINDOWS = 1;
   private static final Resource RESOURCE = Resource.DISK;
+  private final boolean _shouldEmptyZeroCapacityDisks;
 
   /**
    * Constructor for Capacity Goal.
    */
   public IntraBrokerDiskCapacityGoal() {
+    _shouldEmptyZeroCapacityDisks = false;
+  }
 
+  /**
+   * Constructor for Intra Broker Disk Capacity Goal.
+   *
+   * @param shouldEmptyZeroCapacityDisks specifies if the goal should move all replicas from disks with 0 capacity
+   */
+  public IntraBrokerDiskCapacityGoal(boolean shouldEmptyZeroCapacityDisks) {
+      _shouldEmptyZeroCapacityDisks = shouldEmptyZeroCapacityDisks;
   }
 
   /**
@@ -56,6 +66,7 @@ public class IntraBrokerDiskCapacityGoal extends AbstractGoal {
    */
   IntraBrokerDiskCapacityGoal(BalancingConstraint constraint) {
     _balancingConstraint = constraint;
+    _shouldEmptyZeroCapacityDisks = false;
   }
 
   @Override
@@ -149,8 +160,12 @@ public class IntraBrokerDiskCapacityGoal extends AbstractGoal {
   protected boolean selfSatisfied(ClusterModel clusterModel, BalancingAction action) {
     Replica sourceReplica = clusterModel.broker(action.sourceBrokerId()).replica(action.topicPartition());
     Disk destinationDisk = clusterModel.broker(action.destinationBrokerId()).disk(action.destinationBrokerLogdir());
-    return sourceReplica.load().expectedUtilizationFor(RESOURCE) > 0
-           && isMovementAcceptableForCapacity(sourceReplica, destinationDisk);
+    boolean shouldMoveReplica = sourceReplica.load().expectedUtilizationFor(RESOURCE) > 0;
+    if (_shouldEmptyZeroCapacityDisks) {
+      // should also move replicas with 0 expected disk utilization
+      shouldMoveReplica = sourceReplica.load().expectedUtilizationFor(RESOURCE) >= 0;
+    }
+    return shouldMoveReplica && isMovementAcceptableForCapacity(sourceReplica, destinationDisk);
   }
 
   /**
@@ -194,7 +209,7 @@ public class IntraBrokerDiskCapacityGoal extends AbstractGoal {
         if (d == null) {
           LOG.debug("Failed to move replica {} to any disk {} in broker {}", replica, candidateDisks, replica.broker());
         }
-        if (!isUtilizationOverLimit(disk)) {
+        if (!isUtilizationOverLimit(disk) && !_shouldEmptyZeroCapacityDisks) {
           break;
         }
       }
@@ -221,6 +236,10 @@ public class IntraBrokerDiskCapacityGoal extends AbstractGoal {
           throw new OptimizationFailureException(String.format("[%s] Utilization (%.2f) for disk %s on broker %d is above capacity limit.",
                                                                name(), disk.utilization(), disk, broker.id()), recommendation);
         }
+        if (_shouldEmptyZeroCapacityDisks && disk.capacity() == 0 && disk.replicas().size() > 0) {
+          throw new OptimizationFailureException(String.format("[%s] Could not move all replicas from disk %s on broker %d",
+                                                               name(), disk.logDir(), broker.id()));
+        }
       }
     }
     finish();
@@ -244,12 +263,17 @@ public class IntraBrokerDiskCapacityGoal extends AbstractGoal {
 
   /**
    * Check whether the combined replica utilization is above the given disk capacity limits.
+   * If _shouldEmptyZeroCapacityDisks is true, the disk utilization is over limit only if it is greater than 0.
    *
    * @param disk Disk to be checked for capacity limit violation.
    * @return {@code true} if utilization is over the limit, {@code false} otherwise.
    */
   private boolean isUtilizationOverLimit(Disk disk) {
-    return disk.utilization() > disk.capacity() * _balancingConstraint.capacityThreshold(RESOURCE);
+    boolean diskUtilizationValid = true;
+    if (_shouldEmptyZeroCapacityDisks) {
+      diskUtilizationValid = disk.utilization() > 0;
+    }
+    return diskUtilizationValid && disk.utilization() > disk.capacity() * _balancingConstraint.capacityThreshold(RESOURCE);
   }
 
   /**
