@@ -6,9 +6,12 @@ package com.linkedin.kafka.cruisecontrol.servlet.handler.async.runnable;
 
 import com.linkedin.cruisecontrol.exception.NotEnoughValidWindowsException;
 import com.linkedin.kafka.cruisecontrol.KafkaCruiseControl;
+import com.linkedin.kafka.cruisecontrol.analyzer.BalancingConstraint;
 import com.linkedin.kafka.cruisecontrol.analyzer.OptimizationOptions;
 import com.linkedin.kafka.cruisecontrol.analyzer.OptimizerResult;
-import com.linkedin.kafka.cruisecontrol.analyzer.goals.DiskRemovalGoal;
+import com.linkedin.kafka.cruisecontrol.analyzer.goals.Goal;
+import com.linkedin.kafka.cruisecontrol.analyzer.goals.IntraBrokerDiskCapacityGoal;
+import com.linkedin.kafka.cruisecontrol.common.Resource;
 import com.linkedin.kafka.cruisecontrol.config.constants.ExecutorConfig;
 import com.linkedin.kafka.cruisecontrol.exception.KafkaCruiseControlException;
 import com.linkedin.kafka.cruisecontrol.model.Broker;
@@ -26,24 +29,28 @@ import java.util.ArrayList;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
-import static com.linkedin.kafka.cruisecontrol.config.constants.AnalyzerConfig.REMOVE_DISKS_REMAINING_SIZE_ERROR_MARGIN;
-import static com.linkedin.kafka.cruisecontrol.servlet.handler.async.runnable.RunnableUtils.*;
+import static com.linkedin.kafka.cruisecontrol.servlet.handler.async.runnable.RunnableUtils.maybeStopOngoingExecutionToModifyAndWait;
+import static com.linkedin.kafka.cruisecontrol.servlet.handler.async.runnable.RunnableUtils.computeOptimizationOptions;
+import static com.linkedin.kafka.cruisecontrol.servlet.handler.async.runnable.RunnableUtils.isKafkaAssignerMode;
+import static com.linkedin.kafka.cruisecontrol.servlet.handler.async.runnable.RunnableUtils.SELF_HEALING_EXECUTION_PROGRESS_CHECK_INTERVAL_MS;
+import static com.linkedin.kafka.cruisecontrol.servlet.handler.async.runnable.RunnableUtils.SELF_HEALING_REPLICA_MOVEMENT_STRATEGY;
 import static com.linkedin.kafka.cruisecontrol.servlet.parameters.ParameterUtils.DEFAULT_START_TIME_FOR_CLUSTER_MODEL;
 
 public class RemoveDisksRunnable extends GoalBasedOperationRunnable {
     private static final Logger LOG = LoggerFactory.getLogger(RemoveDisksRunnable.class);
-    protected final Map<Integer, Set<String>> _brokerIdAndLogdirs;
-
-    protected final double _errorMargin;
+    private static final int CONCURRENT_INTER_BROKER_PARTITION_MOVEMENTS = 0;
+    private static final int MAX_INTER_BROKER_PARTITION_MOVEMENTS = 0;
+    private static final int CONCURRENT_INTRA_BROKER_PARTITION_MOVEMENTS = 1;
+    private static final int CONCURRENT_LEADER_MOVEMENTS = 1;
+    private final Map<Integer, Set<String>> _brokerIdAndLogdirs;
 
     public RemoveDisksRunnable(KafkaCruiseControl kafkaCruiseControl,
                                OperationFuture future,
                                RemoveDisksParameters parameters,
                                String uuid) {
-        super(kafkaCruiseControl, future, parameters, parameters.dryRun(), parameters.stopOngoingExecution(), parameters.skipHardGoalCheck(),
+        super(kafkaCruiseControl, future, parameters, parameters.dryRun(), parameters.stopOngoingExecution(), false,
                 uuid, parameters::reason);
         _brokerIdAndLogdirs = parameters.brokerIdAndLogdirs();
-        _errorMargin = (double) _kafkaCruiseControl.config().mergedConfigValues().get(REMOVE_DISKS_REMAINING_SIZE_ERROR_MARGIN);
     }
 
     @Override
@@ -55,7 +62,9 @@ public class RemoveDisksRunnable extends GoalBasedOperationRunnable {
     protected void init() {
         _kafkaCruiseControl.sanityCheckDryRun(_dryRun, _stopOngoingExecution);
         _goalsByPriority = new ArrayList<>(1);
-        _goalsByPriority.add(new DiskRemovalGoal(_brokerIdAndLogdirs, _errorMargin));
+        Goal intraBrokerDiskCapacityGoal = new IntraBrokerDiskCapacityGoal(true);
+        intraBrokerDiskCapacityGoal.configure(_kafkaCruiseControl.config().mergedConfigValues());
+        _goalsByPriority.add(intraBrokerDiskCapacityGoal);
 
         _operationProgress = _future.operationProgress();
         if (_stopOngoingExecution) {
@@ -79,6 +88,10 @@ public class RemoveDisksRunnable extends GoalBasedOperationRunnable {
 
         checkCanRemoveDisks(_brokerIdAndLogdirs, clusterModel);
 
+        _brokerIdAndLogdirs.forEach((brokerId, logDirsToRemove) ->
+                logDirsToRemove.forEach(logDir -> clusterModel.broker(brokerId).disk(logDir).markDiskForRemoval())
+        );
+
         OptimizationOptions optimizationOptions = computeOptimizationOptions(clusterModel,
                 false,
                 _kafkaCruiseControl,
@@ -98,10 +111,10 @@ public class RemoveDisksRunnable extends GoalBasedOperationRunnable {
                     result.goalProposals(),
                     Collections.emptySet(),
                     isKafkaAssignerMode(_goals),
-                    0,
-                    0,
-                    1,
-                    1,
+                    CONCURRENT_INTER_BROKER_PARTITION_MOVEMENTS,
+                    MAX_INTER_BROKER_PARTITION_MOVEMENTS,
+                    CONCURRENT_INTRA_BROKER_PARTITION_MOVEMENTS,
+                    CONCURRENT_LEADER_MOVEMENTS,
                     SELF_HEALING_EXECUTION_PROGRESS_CHECK_INTERVAL_MS,
                     SELF_HEALING_REPLICA_MOVEMENT_STRATEGY,
                     _kafkaCruiseControl.config().getLong(ExecutorConfig.DEFAULT_REPLICATION_THROTTLE_CONFIG),
@@ -115,33 +128,29 @@ public class RemoveDisksRunnable extends GoalBasedOperationRunnable {
     }
 
     private void checkCanRemoveDisks(Map<Integer, Set<String>> brokerIdAndLogdirs, ClusterModel clusterModel) {
+        BalancingConstraint balancingConstraint = new BalancingConstraint(_kafkaCruiseControl.config());
+        double capacityThreshold = balancingConstraint.capacityThreshold(Resource.DISK);
         for (Map.Entry<Integer, Set<String>> entry : brokerIdAndLogdirs.entrySet()) {
             Integer brokerId = entry.getKey();
-            Set<String> logDirs = entry.getValue();
+            Set<String> logDirsToRemove = entry.getValue();
             Broker broker = clusterModel.broker(brokerId);
             Set<String> brokerLogDirs = broker.disks().stream().map(Disk::logDir).collect(Collectors.toSet());
-            if (!brokerLogDirs.containsAll(logDirs)) {
+            if (!brokerLogDirs.containsAll(logDirsToRemove)) {
                 throw new IllegalArgumentException(String.format("Invalid log dirs provided for broker %d.", brokerId));
             }
-            if (broker.disks().size() < logDirs.size()) {
-                throw new IllegalArgumentException(String.format("Too many log dirs provided for broker %d.", brokerId));
-            } else if (broker.disks().size() == logDirs.size()) {
+            if (broker.disks().size() == logDirsToRemove.size()) {
                 throw new IllegalArgumentException(String.format("No log dir remaining to move replicas to for broker %d.", brokerId));
             }
 
-            double removedUsage = 0.0;
+            double futureUsage = 0.0;
             double remainingCapacity = 0.0;
-            double currentUsage = 0.0;
             for (Disk disk : broker.disks()) {
-                if (logDirs.contains(disk.logDir())) {
-                    removedUsage += disk.utilization();
-                } else {
+                futureUsage += disk.utilization();
+                if (!logDirsToRemove.contains(disk.logDir())) {
                     remainingCapacity += disk.capacity();
-                    currentUsage += disk.utilization();
                 }
             }
-            double futureUsage = removedUsage + currentUsage;
-            if ((1 - (futureUsage / remainingCapacity)) < _errorMargin) {
+            if (futureUsage / remainingCapacity > capacityThreshold) {
                 throw new IllegalArgumentException("Not enough remaining capacity to move replicas to.");
             }
         }
