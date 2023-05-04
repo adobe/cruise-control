@@ -13,7 +13,11 @@ import java.util.Collections;
 import java.util.Set;
 import java.util.Map;
 
-import static com.linkedin.kafka.cruisecontrol.servlet.parameters.ParameterUtils.*;
+import static com.linkedin.kafka.cruisecontrol.servlet.parameters.ParameterUtils.BROKER_ID_AND_LOGDIRS_PARAM;
+import static com.linkedin.kafka.cruisecontrol.servlet.parameters.ParameterUtils.DRY_RUN_PARAM;
+import static com.linkedin.kafka.cruisecontrol.servlet.parameters.ParameterUtils.REASON_PARAM;
+import static com.linkedin.kafka.cruisecontrol.servlet.parameters.ParameterUtils.STOP_ONGOING_EXECUTION_PARAM;
+import static com.linkedin.kafka.cruisecontrol.servlet.parameters.ParameterUtils.JSON_PARAM;
 
 public class RemoveDisksParameters extends GoalBasedOptimizationParameters {
     protected static final SortedSet<String> CASE_INSENSITIVE_PARAMETER_NAMES;
@@ -22,15 +26,14 @@ public class RemoveDisksParameters extends GoalBasedOptimizationParameters {
         validParameterNames.add(BROKER_ID_AND_LOGDIRS_PARAM);
         validParameterNames.add(DRY_RUN_PARAM);
         validParameterNames.add(REASON_PARAM);
-        validParameterNames.add(SKIP_HARD_GOAL_CHECK_PARAM);
         validParameterNames.add(STOP_ONGOING_EXECUTION_PARAM);
+        validParameterNames.add(JSON_PARAM);
         CASE_INSENSITIVE_PARAMETER_NAMES = Collections.unmodifiableSortedSet(validParameterNames);
     }
-    protected boolean _dryRun;
-    protected boolean _skipHardGoalCheck;
-    protected String _reason;
-    protected boolean _stopOngoingExecution;
-    protected Map<Integer, Set<String>> _logdirByBrokerId;
+    private boolean _dryRun;
+    private String _reason;
+    private boolean _stopOngoingExecution;
+    private Map<Integer, Set<String>> _logdirByBrokerId;
 
     public RemoveDisksParameters() {
         super();
@@ -41,7 +44,6 @@ public class RemoveDisksParameters extends GoalBasedOptimizationParameters {
         super.initParameters();
         _logdirByBrokerId = ParameterUtils.brokerIdAndLogdirs(_requestContext);
         _dryRun = ParameterUtils.getDryRun(_requestContext);
-        _skipHardGoalCheck = ParameterUtils.skipHardGoalCheck(_requestContext);
         boolean requestReasonRequired = _config.getBoolean(ExecutorConfig.REQUEST_REASON_REQUIRED_CONFIG);
         _reason = ParameterUtils.reason(_requestContext, requestReasonRequired && !_dryRun);
         _stopOngoingExecution = ParameterUtils.stopOngoingExecution(_requestContext);
@@ -68,9 +70,6 @@ public class RemoveDisksParameters extends GoalBasedOptimizationParameters {
     }
     public boolean dryRun() {
         return _dryRun;
-    }
-    public boolean skipHardGoalCheck() {
-        return _skipHardGoalCheck;
     }
     public boolean stopOngoingExecution() {
         return _stopOngoingExecution;
