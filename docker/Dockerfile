@@ -1,4 +1,4 @@
-FROM gradle:jdk17 AS build
+FROM gradle:jdk25 AS build
 
 USER root
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends git ca-certificates
@@ -41,22 +41,23 @@ RUN set -eux; \
 	; \
 	rm -rf /var/lib/apt/lists/*
 
-ENV JAVA_HOME /usr/local/openjdk-17
-ENV PATH $JAVA_HOME/bin:$PATH
+ENV JAVA_HOME=/usr/local/openjdk-25
+ENV PATH=$JAVA_HOME/bin:$PATH
 
 # Default to UTF-8 file.encoding
-ENV LANG C.UTF-8
+ENV LANG=C.UTF-8
+ENV JAVA_VERSION=25
 RUN set -eux; \
 	\
 	arch="$(dpkg --print-architecture)"; \
 	case "$arch" in \
 		'amd64') \
-			downloadUrl='https://download.oracle.com/java/17/latest/jdk-17_linux-x64_bin.tar.gz'; \
-			downloadSha256='https://download.oracle.com/java/17/latest/jdk-17_linux-x64_bin.tar.gz.sha256'; \
+			downloadUrl='https://download.oracle.com/java/25/latest/jdk-25_linux-x64_bin.tar.gz'; \
+			downloadSha256='https://download.oracle.com/java/25/latest/jdk-25_linux-x64_bin.tar.gz.sha256'; \
 			;; \
 		'arm64') \
-			downloadUrl='https://download.oracle.com/java/17/latest/jdk-17_linux-aarch64_bin.tar.gz'; \
-			downloadSha256='https://download.oracle.com/java/17/latest/jdk-17_linux-aarch64_bin.tar.gz.sha256'; \
+			downloadUrl='https://download.oracle.com/java/25/latest/jdk-25_linux-aarch64_bin.tar.gz'; \
+			downloadSha256='https://download.oracle.com/java/25/latest/jdk-25_linux-aarch64_bin.tar.gz.sha256'; \
 			;; \
 		*) echo >&2 "error: unsupported architecture: '$arch'"; exit 1 ;; \
 	esac; \

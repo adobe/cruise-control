@@ -96,13 +96,27 @@ subprojects {
 
   java {
     toolchain {
-      languageVersion = JavaLanguageVersion.of(17)
+      languageVersion = JavaLanguageVersion.of(25)
     }
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+  }
+
+  tasks.withType(JavaCompile).configureEach {
+    options.release = 21
+  }
+
+  jacoco {
+    toolVersion = jacocoVersion
   }
 
   dependencies {
     // Jackson is mostly a transitive dependency; this BOM aligns versions across Kafka, Swagger, and Vertx dependencies
     implementation platform("com.fasterxml.jackson:jackson-bom:${jacksonBomVersion}")
+    constraints {
+      // Keep the existing SpotBugs checks while allowing its parser to read JDK 25 classes.
+      spotbugs "org.ow2.asm:asm:${asmVersion}"
+    }
   }
 
   tasks.register("sourcesJar", Jar) {
@@ -264,6 +278,12 @@ project(':cruise-control-core') {
 project(':cruise-control') {
   apply plugin: 'scala'
 
+  tasks.withType(ScalaCompile).configureEach {
+    scalaCompileOptions.additionalParameters = ['-release:21']
+    // Gradle 9.1's joint compiler does not propagate options.release to javac.
+    options.compilerArgs += ['--release', '21']
+  }
+
   //needed because our java classes depend on scala classes, so must be compiled by scala
   sourceSets {
     main {
@@ -338,6 +358,8 @@ project(':cruise-control') {
     implementation "io.swagger.parser.v3:swagger-parser-v3:${swaggerParserVersion}"
     implementation "io.github.classgraph:classgraph:${classgraphVersion}"
     implementation "com.google.code.findbugs:jsr305:${jsr305Version}"
+    implementation "org.scala-lang:scala-library:$scalaVersion"
+    compileOnly "com.github.spotbugs:spotbugs-annotations:${spotbugsVersion}"
 
     constraints {
       implementation("org.apache.logging.log4j:log4j-core:${log4jVersion}") {
@@ -535,6 +557,6 @@ static def getScalaBinaryVersion(versionStr) {
 
 //wrapper generation task
 wrapper {
-  gradleVersion = '8.14'
-  distributionType = Wrapper.DistributionType.ALL
+  gradleVersion = '9.1.0'
+  distributionType = Wrapper.DistributionType.BIN
 }
