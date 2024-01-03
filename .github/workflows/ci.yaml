@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        java-ver: [17]
+        java-ver: [25]
         java-dist: ['temurin']
     steps:
       - uses: actions/checkout@v4
@@ -42,7 +42,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        java-ver: [17]
+        java-ver: [25]
         java-dist: ['temurin']
     steps:
       - uses: actions/checkout@v4

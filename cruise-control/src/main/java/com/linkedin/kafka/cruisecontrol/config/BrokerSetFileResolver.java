@@ -17,6 +17,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import com.google.gson.Gson;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 
 /**
@@ -78,6 +79,7 @@ public class BrokerSetFileResolver implements BrokerSetResolver {
     return _brokerSetAssignmentPolicy.assignBrokerSetsForUnresolvedBrokers(rackIdByBrokerId, brokerIdsByBrokerSetId);
   }
 
+  @SuppressFBWarnings(value = "NP_UNWRITTEN_FIELD")
   private Map<String, Set<Integer>> loadBrokerSetData() throws IOException {
     try (Reader reader = Files.newBufferedReader(Path.of(_configFile), StandardCharsets.UTF_8)) {
       Gson gson = new Gson();
