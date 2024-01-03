@@ -50,7 +50,8 @@ Cruise Control for Apache Kafka
 
 ### Environment Requirements ###
 * The `main` branch of Cruise Control is compatible with Apache Kafka 2.5+.
-* This project requires Java 17.
+* This Adobe fork requires JDK 25 to build and Java 21 or later to run, including on Kafka brokers using the metrics reporter.
+* The build uses Scala 2.13.17 and targets Java 21-compatible bytecode.
 
 ### Quick Start ###
 0. Get Cruise Control
