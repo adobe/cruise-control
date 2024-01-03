@@ -9,6 +9,7 @@ import com.google.gson.stream.JsonReader;
 import com.linkedin.kafka.cruisecontrol.common.Resource;
 import com.linkedin.kafka.cruisecontrol.KafkaCruiseControlUtils;
 import com.linkedin.kafka.cruisecontrol.exception.BrokerCapacityResolutionException;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -290,12 +291,14 @@ public class BrokerCapacityConfigFileResolver implements BrokerCapacityConfigRes
     return brokerCapacityInfo;
   }
 
+  @SuppressFBWarnings(value = "NP_UNWRITTEN_FIELD")
   private void loadCapacities() throws FileNotFoundException {
     JsonReader reader = null;
     try {
       reader = new JsonReader(new InputStreamReader(new FileInputStream(_configFile), StandardCharsets.UTF_8));
       Gson gson = new Gson();
-      Set<BrokerCapacity> brokerCapacities = ((BrokerCapacities) gson.fromJson(reader, BrokerCapacities.class)).brokerCapacities;
+      final BrokerCapacities config = gson.fromJson(reader, BrokerCapacities.class);
+      Set<BrokerCapacity> brokerCapacities = config.brokerCapacities;
       capacitiesForBrokers = new HashMap<>();
       Set<Boolean> numCoresConfigConsistency = new HashSet<>();
       for (BrokerCapacity bc : brokerCapacities) {
