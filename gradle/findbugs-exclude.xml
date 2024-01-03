@@ -51,6 +51,7 @@
       <Bug pattern="NP_ALWAYS_NULL"/>
       <Bug pattern="MS_CANNOT_BE_FINAL"/>
       <Bug pattern="MS_PKGPROTECT"/>
+      <Bug pattern="CT_CONSTRUCTOR_THROW"/>
     </Or>
   </Match>
 
@@ -58,6 +59,10 @@
    serializable for some outdated reason. -->
   <Match>
     <Bug pattern="SE_BAD_FIELD"/>
+  </Match>
+
+  <Match>
+    <Bug pattern="CT_CONSTRUCTOR_THROW"/>
   </Match>
 
   <Match>
