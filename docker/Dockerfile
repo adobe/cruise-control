@@ -1,4 +1,4 @@
-FROM gradle:jdk21
+FROM gradle:jdk21 AS build
 
 USER root
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends git ca-certificates
@@ -13,14 +13,14 @@ RUN mv -v /cruise-control/cruise-control/build/libs/cruise-control-*.jar \
 RUN mv -v /cruise-control/cruise-control/build/dependant-libs/cruise-control-metrics-reporter-*.jar \
   /cruise-control/cruise-control/build/dependant-libs/cruise-control-metrics-reporter.jar
 
-FROM node:18-buster
+FROM node:10 AS ui
 RUN mkdir /src && cd /src && git clone https://github.com/amuraru/cruise-control-ui.git
 WORKDIR /src/cruise-control-ui
 RUN git fetch origin
 RUN git checkout master
 RUN git pull
 RUN git rev-parse HEAD
-RUN npm install
+RUN npm install --verbose --timeout=600000
 RUN npm run build
 
 # backported from https://github.com/docker-library/openjdk/blob/master/18/jdk/slim-bullseye/Dockerfile
@@ -110,12 +110,12 @@ RUN set -eux; \
 	java --version
 
 RUN mkdir -p /opt/cruise-control /opt/cruise-control/cruise-control-ui
-COPY --from=0 /cruise-control/cruise-control/build/libs/cruise-control.jar /opt/cruise-control/cruise-control/build/libs/cruise-control.jar
-COPY --from=0 /cruise-control/config /opt/cruise-control/config
-COPY --from=0 /cruise-control/kafka-cruise-control-start.sh /opt/cruise-control/
-COPY --from=0 /cruise-control/cruise-control/build/dependant-libs /opt/cruise-control/cruise-control/build/dependant-libs
+COPY --from=build /cruise-control/cruise-control/build/libs/cruise-control.jar /opt/cruise-control/cruise-control/build/libs/cruise-control.jar
+COPY --from=build /cruise-control/config /opt/cruise-control/config
+COPY --from=build /cruise-control/kafka-cruise-control-start.sh /opt/cruise-control/
+COPY --from=build /cruise-control/cruise-control/build/dependant-libs /opt/cruise-control/cruise-control/build/dependant-libs
 COPY docker/opt/cruise-control /opt/cruise-control/
-COPY --from=1 /src/cruise-control-ui/dist /opt/cruise-control/cruise-control-ui/dist
+COPY --from=ui /src/cruise-control-ui/dist /opt/cruise-control/cruise-control-ui/dist
 RUN echo "local,localhost,/kafkacruisecontrol" > /opt/cruise-control/cruise-control-ui/dist/static/config.csv
 
 EXPOSE 8090
