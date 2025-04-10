@@ -15,7 +15,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import scala.collection.JavaConverters;
 import scala.Option;
 import scala.jdk.javaapi.CollectionConverters;
 import org.apache.zookeeper.client.ZKClientConfig;
