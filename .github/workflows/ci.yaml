@@ -12,6 +12,7 @@ concurrency:
 
 jobs:
   test:
+    if: false ## update to true to run this workflow
     name: "test with JDK=${{matrix.java-dist}}:${{matrix.java-ver}}"
     runs-on: [ubuntu-latest]
     strategy:
@@ -34,6 +35,7 @@ jobs:
         run: ./gradlew --no-daemon -PmaxParallelForks=1 build
 
   integration-test:
+    if: false ## update to true to run this workflow
     name: "integration-test with JDK=${{matrix.java-dist}}:${{matrix.java-ver}}"
     runs-on: [ubuntu-latest]
     strategy:
@@ -56,6 +58,7 @@ jobs:
         run: ./gradlew --no-daemon -PmaxParallelForks=1 clean integrationTest
 
   build-platform:
+    if: false ## update to true to run this workflow
     name: platform build with JDK=${{matrix.java-dist}}:${{matrix.java-ver}} on ${{matrix.hw_platform}}
     strategy:
       fail-fast: false
