@@ -77,3 +77,11 @@ workflows:
               ignore: /.*/
             tags:
               only: /^[0-9]+\.[0-9]+\.[0-9]+(?:-[a-zA-Z0-9_]+)?$/
+      - publish:
+          requires:
+            - integration-test
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /^[0-9]+\.[0-9]+\.[0-9]+(?:-[a-zA-Z0-9_]+)?$/
