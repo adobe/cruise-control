@@ -57,6 +57,8 @@ public class MinTopicLeadersPerBrokerGoal extends AbstractGoal {
   // of leaders are computed dynamically as no-of-topic-leaders / no-of-brokers-available.
   // When set to a positive value, this is used instead
   private Map<String, Integer> _mustHaveTopicMinLeadersPerBroker;
+  // For dynamic mode, track which brokers are designated to host leaders for each topic (subset selection per topic)
+  private Map<String, Set<Integer>> _topicTargetBrokerIds;
 
   public MinTopicLeadersPerBrokerGoal() {
 
@@ -149,7 +151,8 @@ public class MinTopicLeadersPerBrokerGoal extends AbstractGoal {
       return false;
     }
     int topicLeaderCountOnSourceBroker = replicaToBeRemoved.broker().numLeadersFor(topic);
-    return topicLeaderCountOnSourceBroker <= minTopicLeadersPerBroker(topic);
+    int minRequired = requiredMinLeadersForBroker(topic, replicaToBeRemoved.broker());
+    return topicLeaderCountOnSourceBroker <= minRequired;
   }
 
   /**
@@ -173,12 +176,27 @@ public class MinTopicLeadersPerBrokerGoal extends AbstractGoal {
     Map<String, Integer> numLeadersByTopicNames = clusterModel.numLeadersPerTopic(mustHaveTopicLeadersPerBroker);
     Set<Broker> eligibleBrokersForLeadership = eligibleBrokersForLeadership(clusterModel, optimizationOptions);
 
+    // Build per-topic target broker subsets for dynamic mode
+    _topicTargetBrokerIds = new HashMap<>();
+    List<Integer> sortedEligibleIds = eligibleBrokersForLeadership.stream().map(Broker::id).sorted().collect(Collectors.toList());
+
     for (String topicName : mustHaveTopicLeadersPerBroker) {
       int topicNumLeaders = numLeadersByTopicNames.get(topicName);
       _mustHaveTopicMinLeadersPerBroker.put(topicName,
-              _balancingConstraint.minTopicLeadersPerBroker() == 0
-                      ? eligibleBrokersForLeadership.size() == 0 ? 0 : topicNumLeaders / eligibleBrokersForLeadership.size()
-                      : _balancingConstraint.minTopicLeadersPerBroker());
+          _balancingConstraint.minTopicLeadersPerBroker() == 0
+              ? calculateMinLeadersPerBroker(topicNumLeaders, eligibleBrokersForLeadership.size())
+              : _balancingConstraint.minTopicLeadersPerBroker());
+      if (_balancingConstraint.minTopicLeadersPerBroker() == 0) {
+        // Choose a rotating subset of eligible brokers for this topic to host leaders when brokers > leaders
+        if (sortedEligibleIds.size() > topicNumLeaders && topicNumLeaders > 0) {
+          Set<Integer> targetIds = selectRotatingSubset(sortedEligibleIds, topicName, topicNumLeaders);
+          _topicTargetBrokerIds.put(topicName, targetIds);
+        } else if (topicNumLeaders > 0) {
+          _topicTargetBrokerIds.put(topicName, new HashSet<>(sortedEligibleIds));
+        } else {
+          _topicTargetBrokerIds.put(topicName, Collections.emptySet());
+        }
+      }
     }
     // Sanity checks
     validateTopicsWithMinLeaderIsNotExcluded(optimizationOptions);
@@ -186,13 +204,57 @@ public class MinTopicLeadersPerBrokerGoal extends AbstractGoal {
     validateBrokersAllowedReplicaMoveExist(clusterModel, optimizationOptions);
     boolean onlyMoveImmigrantReplicas = optimizationOptions.onlyMoveImmigrantReplicas();
     new SortedReplicasHelper().maybeAddSelectionFunc(ReplicaSortFunctionFactory.selectImmigrants(), onlyMoveImmigrantReplicas)
-                              .addSelectionFunc(ReplicaSortFunctionFactory.selectReplicasBasedOnIncludedTopics(mustHaveTopicLeadersPerBroker))
-                              .maybeAddPriorityFunc(ReplicaSortFunctionFactory.prioritizeImmigrants(), !onlyMoveImmigrantReplicas)
-                              .trackSortedReplicasFor(_replicaSortName, clusterModel);
+        .addSelectionFunc(ReplicaSortFunctionFactory.selectReplicasBasedOnIncludedTopics(mustHaveTopicLeadersPerBroker))
+        .maybeAddPriorityFunc(ReplicaSortFunctionFactory.prioritizeImmigrants(), !onlyMoveImmigrantReplicas)
+        .trackSortedReplicasFor(_replicaSortName, clusterModel);
   }
 
   private int minTopicLeadersPerBroker(String topic) {
     return _mustHaveTopicMinLeadersPerBroker.get(topic);
+  }
+
+  /* Helper methods for per-topic leader distribution */
+  private int requiredMinLeadersForBroker(String topic, Broker broker) {
+    Integer perBrokerMin = _mustHaveTopicMinLeadersPerBroker.get(topic);
+    if (perBrokerMin == null || perBrokerMin == 0) return 0;
+    // If static config is set (>0), all eligible brokers are expected to have at least perBrokerMin
+    if (_balancingConstraint.minTopicLeadersPerBroker() > 0) return perBrokerMin;
+    // Dynamic mode: only topic-target brokers are expected to have leaders when brokers > leaders
+    Set<Integer> targets = _topicTargetBrokerIds != null ? _topicTargetBrokerIds.get(topic) : null;
+    if (targets == null || targets.isEmpty()) return perBrokerMin; // either all brokers or none
+    return targets.contains(broker.id()) ? perBrokerMin : 0;
+  }
+
+
+  private Set<Integer> selectRotatingSubset(List<Integer> sortedEligibleIds, String topicName, int subsetSize) {
+    if (subsetSize <= 0) return Collections.emptySet();
+    if (subsetSize >= sortedEligibleIds.size()) return new HashSet<>(sortedEligibleIds);
+    int n = sortedEligibleIds.size();
+    // Create a non-negative deterministic offset from topic name
+    int offset = Math.floorMod(topicName.hashCode(), n);
+    Set<Integer> result = new HashSet<>(subsetSize);
+    for (int i = 0; i < subsetSize; i++) {
+      int idx = (offset + i) % n;
+      result.add(sortedEligibleIds.get(idx));
+    }
+    return result;
+  }
+
+  /**
+   * Calculate per-broker minimum leaders for a topic based on number of eligible brokers and leaders.
+   */
+  private int calculateMinLeadersPerBroker(int topicNumLeaders, int numEligibleBrokers) {
+    if (numEligibleBrokers == 0) {
+      return 0;
+    }
+
+    // If there are more brokers than leaders, distribute to subset of brokers (1 leader each)
+    if (numEligibleBrokers > topicNumLeaders) {
+      return topicNumLeaders > 0 ? 1 : 0;
+    }
+
+    // If there are fewer or equal brokers than leaders, distribute evenly
+    return topicNumLeaders / numEligibleBrokers;
   }
 
   private void validateTopicsWithMinLeaderIsNotExcluded(OptimizationOptions optimizationOptions)
@@ -208,23 +270,35 @@ public class MinTopicLeadersPerBrokerGoal extends AbstractGoal {
     });
     if (!shouldNotBeExcludedTopics.isEmpty()) {
       throw new OptimizationFailureException(String.format("[%s] Topics that must have a minimum number of leaders per broker cannot be excluded."
-                                                           + " This error implies a config error. Topics should not be excluded=[%s] (see %s).",
-                                                           name(), String.join(", ", shouldNotBeExcludedTopics),
-                                                           AnalyzerConfig.TOPICS_WITH_MIN_LEADERS_PER_BROKER_CONFIG));
+              + " This error implies a config error. Topics should not be excluded=[%s] (see %s).",
+          name(), String.join(", ", shouldNotBeExcludedTopics),
+          AnalyzerConfig.TOPICS_WITH_MIN_LEADERS_PER_BROKER_CONFIG));
     }
   }
 
   private void validateEnoughLeaderToDistribute(Map<String, Integer> numLeadersByTopicNames, Set<Broker> eligibleBrokersForLeadership)
       throws OptimizationFailureException {
     for (Map.Entry<String, Integer> numLeadersPerTopic : numLeadersByTopicNames.entrySet()) {
-      int totalMinimumLeaderCount = eligibleBrokersForLeadership.size() * minTopicLeadersPerBroker(numLeadersPerTopic.getKey());
-      if (numLeadersPerTopic.getValue() < totalMinimumLeaderCount) {
+      int topicNumLeaders = numLeadersPerTopic.getValue();
+      int numEligibleBrokers = eligibleBrokersForLeadership.size();
+      int minLeadersPerBroker = minTopicLeadersPerBroker(numLeadersPerTopic.getKey());
+
+      // Calculate the actual minimum total leaders needed based on our distribution strategy
+      int totalMinimumLeaderCount;
+      if (numEligibleBrokers > topicNumLeaders) {
+        // When more brokers than leaders, we only need enough leaders to give 1 to each broker that gets one
+        totalMinimumLeaderCount = topicNumLeaders;
+      } else {
+        // When fewer or equal brokers than leaders, all brokers need the minimum
+        totalMinimumLeaderCount = numEligibleBrokers * minLeadersPerBroker;
+      }
+
+      if (topicNumLeaders < totalMinimumLeaderCount) {
         ProvisionRecommendation recommendation = new ProvisionRecommendation.Builder(ProvisionStatus.UNDER_PROVISIONED)
             .numPartitions(totalMinimumLeaderCount).topicPattern(Pattern.compile(numLeadersPerTopic.getKey())).build();
         throw new OptimizationFailureException(
             String.format("[%s] Cannot distribute %d leaders over %d broker(s) with minimum required per broker leader count %d for topic %s.",
-                          name(), numLeadersPerTopic.getValue(), eligibleBrokersForLeadership.size(),
-                          minTopicLeadersPerBroker(numLeadersPerTopic.getKey()), numLeadersPerTopic.getKey()), recommendation);
+                name(), topicNumLeaders, numEligibleBrokers, minLeadersPerBroker, numLeadersPerTopic.getKey()), recommendation);
       }
     }
   }
@@ -259,7 +333,7 @@ public class MinTopicLeadersPerBrokerGoal extends AbstractGoal {
     }
     // Moving leader replica from more abundant broker is considered as self-satisfied
     String topicName = replicaToBeMoved.topicPartition().topic();
-    return sourceBroker.numLeadersFor(topicName) > minTopicLeadersPerBroker(topicName);
+    return sourceBroker.numLeadersFor(topicName) > requiredMinLeadersForBroker(topicName, sourceBroker);
   }
 
   private boolean actionAffectsRelevantTopics(BalancingAction action) {
@@ -267,7 +341,7 @@ public class MinTopicLeadersPerBrokerGoal extends AbstractGoal {
       return true;
     }
     return action.balancingAction() == ActionType.INTER_BROKER_REPLICA_SWAP
-            && _mustHaveTopicMinLeadersPerBroker.containsKey(action.destinationTopic());
+        && _mustHaveTopicMinLeadersPerBroker.containsKey(action.destinationTopic());
   }
 
   /**
@@ -296,12 +370,12 @@ public class MinTopicLeadersPerBrokerGoal extends AbstractGoal {
       if (!isEligibleToHaveLeaders(broker, optimizationOptions)) {
         continue;
       }
-      for (String mustHaveLeaderPerBrokerTopicName : _mustHaveTopicMinLeadersPerBroker.keySet()) {
-        int leaderCount = broker.numLeadersFor(mustHaveLeaderPerBrokerTopicName);
-        if (leaderCount < minTopicLeadersPerBroker(mustHaveLeaderPerBrokerTopicName)) {
+      for (String topicName : _mustHaveTopicMinLeadersPerBroker.keySet()) {
+        int leaderCount = broker.numLeadersFor(topicName);
+        int minRequired = requiredMinLeadersForBroker(topicName, broker);
+        if (leaderCount < minRequired) {
           LOG.warn("[{}] Broker {} has insufficient per-broker leaders for topic {} (required: {} current: {}).",
-                  name(), broker.id(), mustHaveLeaderPerBrokerTopicName,
-                  minTopicLeadersPerBroker(mustHaveLeaderPerBrokerTopicName), leaderCount);
+              name(), broker.id(), topicName, minRequired, leaderCount);
         }
       }
     }
@@ -339,24 +413,24 @@ public class MinTopicLeadersPerBrokerGoal extends AbstractGoal {
                                               Set<Goal> optimizedGoals,
                                               OptimizationOptions optimizationOptions) {
     int topicLeaderCountOnReceiverBroker = broker.numLeadersFor(topicMustHaveLeaderPerBroker);
-    if (topicLeaderCountOnReceiverBroker >= minTopicLeadersPerBroker(topicMustHaveLeaderPerBroker)) {
+    if (topicLeaderCountOnReceiverBroker >= requiredMinLeadersForBroker(topicMustHaveLeaderPerBroker, broker)) {
       // This broker has enough leader replica(s) for the given topic
       return;
     }
     // Try to elect follower replica(s) of the interested topic on this broker to be leader
     List<Replica> followerReplicas = broker.trackedSortedReplicas(_replicaSortName)
-                                           .sortedReplicas(false).stream().filter(
+        .sortedReplicas(false).stream().filter(
             replica -> !replica.isLeader()
-                       && replica.topicPartition().topic().equals(topicMustHaveLeaderPerBroker))
-                                           .collect(Collectors.toList());
+                && replica.topicPartition().topic().equals(topicMustHaveLeaderPerBroker))
+        .collect(Collectors.toList());
 
     for (Replica followerReplica : followerReplicas) {
       Replica leader = clusterModel.partition(followerReplica.topicPartition()).leader();
-      if (leader.broker().numLeadersFor(topicMustHaveLeaderPerBroker) > minTopicLeadersPerBroker(topicMustHaveLeaderPerBroker)) {
+      if (leader.broker().numLeadersFor(topicMustHaveLeaderPerBroker) > requiredMinLeadersForBroker(topicMustHaveLeaderPerBroker, leader.broker())) {
         if (maybeApplyBalancingAction(clusterModel, leader, Collections.singleton(broker),
-                                      LEADERSHIP_MOVEMENT, optimizedGoals, optimizationOptions) != null) {
+            LEADERSHIP_MOVEMENT, optimizedGoals, optimizationOptions) != null) {
           topicLeaderCountOnReceiverBroker++;
-          if (topicLeaderCountOnReceiverBroker >= minTopicLeadersPerBroker(topicMustHaveLeaderPerBroker)) {
+          if (topicLeaderCountOnReceiverBroker >= requiredMinLeadersForBroker(topicMustHaveLeaderPerBroker, broker)) {
             // This broker satisfies this goal for the given topic
             return;
           }
@@ -371,18 +445,18 @@ public class MinTopicLeadersPerBrokerGoal extends AbstractGoal {
     while (!brokersWithExcessiveLeaderToMove.isEmpty()) {
       Broker brokerWithExcessiveLeaderToMove = brokersWithExcessiveLeaderToMove.poll();
       List<Replica> leadersOfTopic = brokerWithExcessiveLeaderToMove.trackedSortedReplicas(_replicaSortName)
-                                                                    .sortedReplicas(false).stream()
-                                                                    .filter(replica ->
-                                                                                replica.isLeader()
-                                                                                && replica.topicPartition()
-                                                                                          .topic()
-                                                                                          .equals(topicMustHaveLeaderPerBroker))
-                                                                    .collect(Collectors.toList());
+          .sortedReplicas(false).stream()
+          .filter(replica ->
+              replica.isLeader()
+                  && replica.topicPartition()
+                  .topic()
+                  .equals(topicMustHaveLeaderPerBroker))
+          .collect(Collectors.toList());
       boolean leaderMoved = false;
       int topicLeaderCountOnGiverBroker = leadersOfTopic.size();
       for (Replica leaderOfTopic : leadersOfTopic) {
         Broker destinationBroker = maybeApplyBalancingAction(clusterModel, leaderOfTopic, Collections.singleton(broker),
-                                                             INTER_BROKER_REPLICA_MOVEMENT, optimizedGoals, optimizationOptions);
+            INTER_BROKER_REPLICA_MOVEMENT, optimizedGoals, optimizationOptions);
         if (destinationBroker != null) {
           leaderMoved = true;
           // Successfully move one leader replica
@@ -391,21 +465,21 @@ public class MinTopicLeadersPerBrokerGoal extends AbstractGoal {
       }
       if (leaderMoved) {
         topicLeaderCountOnReceiverBroker++;
-        if (topicLeaderCountOnReceiverBroker >= minTopicLeadersPerBroker(topicMustHaveLeaderPerBroker)) {
+        if (topicLeaderCountOnReceiverBroker >= requiredMinLeadersForBroker(topicMustHaveLeaderPerBroker, broker)) {
           // This broker satisfies this goal for the given topic
           return;
         }
         topicLeaderCountOnGiverBroker--;
-        if (topicLeaderCountOnGiverBroker > minTopicLeadersPerBroker(topicMustHaveLeaderPerBroker)) {
+        if (topicLeaderCountOnGiverBroker > requiredMinLeadersForBroker(topicMustHaveLeaderPerBroker, brokerWithExcessiveLeaderToMove)) {
           // Still have excessive topic leader to give
           brokersWithExcessiveLeaderToMove.add(brokerWithExcessiveLeaderToMove);
         }
       }
     }
     LOG.warn("{} Cannot make broker {} have at least {} leaders from topic {}. Leaders on broker: {}",
-                                                         name(), broker.id(),
-                                                         minTopicLeadersPerBroker(topicMustHaveLeaderPerBroker),
-                                                         topicMustHaveLeaderPerBroker, topicLeaderCountOnReceiverBroker);
+        name(), broker.id(),
+        requiredMinLeadersForBroker(topicMustHaveLeaderPerBroker, broker),
+        topicMustHaveLeaderPerBroker, topicLeaderCountOnReceiverBroker);
   }
 
   /**
@@ -423,22 +497,22 @@ public class MinTopicLeadersPerBrokerGoal extends AbstractGoal {
       return leaderCountCompareResult == 0 ? Integer.compare(broker1.id(), broker2.id()) : leaderCountCompareResult;
     });
     clusterModel.aliveBrokers()
-                .stream()
-                .filter(broker -> broker.numLeadersFor(topicName) > minTopicLeadersPerBroker(topicName))
-                .forEach(brokersWithExcessiveLeaderToMove::add);
+        .stream()
+        .filter(broker -> broker.numLeadersFor(topicName) > requiredMinLeadersForBroker(topicName, broker))
+        .forEach(brokersWithExcessiveLeaderToMove::add);
     return brokersWithExcessiveLeaderToMove;
   }
 
   private static Set<Broker> eligibleBrokersForLeadership(ClusterModel clusterModel, OptimizationOptions optimizationOptions) {
     return clusterModel.aliveBrokers()
-                       .stream()
-                       .filter(broker -> isEligibleToHaveLeaders(broker, optimizationOptions))
-                       .collect(Collectors.toSet());
+        .stream()
+        .filter(broker -> isEligibleToHaveLeaders(broker, optimizationOptions))
+        .collect(Collectors.toSet());
   }
 
   private static boolean isEligibleToHaveLeaders(Broker broker, OptimizationOptions optimizationOptions) {
     return !optimizationOptions.excludedBrokersForLeadership().contains(broker.id())
-           && !optimizationOptions.excludedBrokersForReplicaMove().contains(broker.id());
+        && !optimizationOptions.excludedBrokersForReplicaMove().contains(broker.id());
   }
 
   private void moveAwayOfflineReplicas(Broker srcBroker,
@@ -454,11 +528,11 @@ public class MinTopicLeadersPerBrokerGoal extends AbstractGoal {
     Set<Replica> offlineReplicas = new HashSet<>(srcBroker.currentOfflineReplicas());
     for (Replica offlineReplica : offlineReplicas) {
       if (maybeApplyBalancingAction(clusterModel, offlineReplica, eligibleBrokersToMoveOfflineReplicasTo,
-                                    INTER_BROKER_REPLICA_MOVEMENT, optimizedGoals, optimizationOptions) == null) {
+          INTER_BROKER_REPLICA_MOVEMENT, optimizedGoals, optimizationOptions) == null) {
         ProvisionRecommendation recommendation = new ProvisionRecommendation.Builder(ProvisionStatus.UNDER_PROVISIONED).numBrokers(1).build();
         throw new OptimizationFailureException(String.format("[%s] Cannot remove %s from %s broker %d (has %d replicas).", name(),
-                                                             offlineReplica, srcBroker.state(), srcBroker.id(), srcBroker.replicas().size()),
-                                               recommendation);
+            offlineReplica, srcBroker.state(), srcBroker.id(), srcBroker.replicas().size()),
+            recommendation);
       }
     }
   }
