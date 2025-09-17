@@ -9,8 +9,6 @@ import static com.linkedin.kafka.cruisecontrol.analyzer.ActionAcceptance.ACCEPT;
 import static com.linkedin.kafka.cruisecontrol.analyzer.ActionAcceptance.REPLICA_REJECT;
 import static com.linkedin.kafka.cruisecontrol.analyzer.goals.GoalUtils.MIN_NUM_VALID_WINDOWS_FOR_SELF_HEALING;
 import static com.linkedin.kafka.cruisecontrol.analyzer.goals.GoalUtils.replicaSortName;
-import static com.linkedin.kafka.cruisecontrol.analyzer.goals.ReplicaDistributionAbstractGoal.ChangeType.ADD;
-import static com.linkedin.kafka.cruisecontrol.analyzer.goals.ReplicaDistributionAbstractGoal.ChangeType.REMOVE;
 
 import com.linkedin.kafka.cruisecontrol.analyzer.ActionAcceptance;
 import com.linkedin.kafka.cruisecontrol.analyzer.ActionType;
@@ -59,9 +57,7 @@ import org.slf4j.LoggerFactory;
  */
 public class TopicLeaderReplicaDistributionGoal extends AbstractGoal {
   private static final Logger LOG = LoggerFactory.getLogger(TopicLeaderReplicaDistributionGoal.class);
-  // Configurable hysteresis margin (default 0.9) used when translating percentage into tolerance.
-  private static final String BALANCE_MARGIN_CONFIG = "topic.leader.replica.distribution.goal.balance.margin";
-  private double _balanceMargin = 0.9;
+
   // Flag to indicate whether the self healing failed to relocate all offline replicas away from dead brokers or broken
   // disks in its initial attempt and currently omitting the replica balance limit to relocate remaining replicas.
   private boolean _fixOfflineReplicasOnly;
@@ -95,45 +91,49 @@ public class TopicLeaderReplicaDistributionGoal extends AbstractGoal {
   }
 
   /**
-   * To avoid churns, we add a balance margin to the user specified rebalance threshold. e.g. when user sets the
-   * threshold to be {@link BalancingConstraint#topicLeaderReplicaBalancePercentage()}, we use
-   * ({@link BalancingConstraint#topicLeaderReplicaBalancePercentage()}-1)*{@link #BALANCE_MARGIN} instead.
+   * Convert the configured balance percentage (multiplicative factor > 1.0) into an effective fractional slack
+   * around the average, applying optional widening for violation runs and a hysteresis margin to reduce thrash.
+   * Example: if percentage=1.15 and margin=0.9, effective slack τ = (1.15 - 1) * 0.9 = 0.135 (~13.5%).
+   * This τ is used to compute raw lower/upper, which are then clamped by integer gap settings.
    *
-   * @param optimizationOptions Options to adjust balance percentage with margin in case goal optimization is triggered
-   * by goal violation detector.
-   * @return The rebalance threshold with a margin.
+   * @param optimizationOptions Options to widen the band when triggered by goal-violation detector.
+   * @return Effective fractional slack τ used to compute raw lower/upper bounds.
    */
   private double balancePercentageWithMargin(OptimizationOptions optimizationOptions) {
     double balancePercentage = _balancingConstraint.topicLeaderReplicaBalancePercentage();
     if (optimizationOptions.isTriggeredByGoalViolation()) {
       balancePercentage *= _balancingConstraint.goalViolationDistributionThresholdMultiplier();
     }
-    return (balancePercentage - 1) * _balanceMargin;
+    return (balancePercentage - 1) * _balancingConstraint.topicLeaderReplicaDistributionGoalBalanceMargin();
   }
 
   /**
-   * Ensure that the given balance limit falls into min/max limits determined by min/max gaps for topic replica balance.
-   * If the computed balance limit is out of these gap-based limits, use the relevant max/min gap-based balance limit.
+   * Clamp a raw per-broker limit (computed from percentage band) into the integer interval defined by
+   * gap settings around the average.
+   * - Lower clamping is anchored at floor(avg): [floor(avg)-maxGap, floor(avg)-minGap] (never < 0)
+   * - Upper clamping is anchored at ceil(avg):  [ceil(avg)+minGap, ceil(avg)+maxGap]
    *
-   * @param computedLimit Computed balance upper or lower limit
-   * @param average Average topic replicas on broker.
-   * @param isLowerLimit is determining lower limit.
-   *
-   * @return A balance limit that falls into [minGap, maxGap] for topic replica balance.
    * @see com.linkedin.kafka.cruisecontrol.config.constants.AnalyzerConfig#TOPIC_REPLICA_COUNT_BALANCE_MIN_GAP_DOC
    * @see com.linkedin.kafka.cruisecontrol.config.constants.AnalyzerConfig#TOPIC_REPLICA_COUNT_BALANCE_MAX_GAP_DOC
    */
-  private int gapBasedBalanceLimit(int computedLimit, double average, boolean isLowerLimit) {
-    int minLimit;
-    int maxLimit;
-    if (isLowerLimit) {
-      maxLimit = Math.max(0, (int) (Math.floor(average) - _balancingConstraint.topicLeaderReplicaBalanceMinGap()));
-      minLimit = Math.max(0, (int) (Math.floor(average) - _balancingConstraint.topicLeaderReplicaBalanceMaxGap()));
-    } else {
-      minLimit = (int) (Math.ceil(average) + _balancingConstraint.topicLeaderReplicaBalanceMinGap());
-      maxLimit = (int) (Math.ceil(average) + _balancingConstraint.topicLeaderReplicaBalanceMaxGap());
-    }
-    return Math.max(minLimit, Math.min(computedLimit, maxLimit));
+  private int clamp(int value, int lo, int hi) {
+    return Math.max(lo, Math.min(value, hi));
+  }
+
+  private int clampLower(int computed, int floorAvg) {
+    int minGap = _balancingConstraint.topicLeaderReplicaBalanceMinGap();
+    int maxGap = _balancingConstraint.topicLeaderReplicaBalanceMaxGap();
+    int minLimit = Math.max(0, floorAvg - maxGap);
+    int maxLimit = Math.max(0, floorAvg - minGap);
+    return clamp(computed, minLimit, maxLimit);
+  }
+
+  private int clampUpper(int computed, int ceilAvg) {
+    int minGap = _balancingConstraint.topicLeaderReplicaBalanceMinGap();
+    int maxGap = _balancingConstraint.topicLeaderReplicaBalanceMaxGap();
+    int minLimit = ceilAvg + minGap;
+    int maxLimit = ceilAvg + maxGap;
+    return clamp(computed, minLimit, maxLimit);
   }
 
   /**
@@ -143,9 +143,9 @@ public class TopicLeaderReplicaDistributionGoal extends AbstractGoal {
    * @return The topic replica balance upper threshold in number of topic replicas.
    */
   private int balanceUpperLimit(String topic, OptimizationOptions optimizationOptions) {
-    int computedUpperLimit = (int) Math.ceil(_avgTopicLeaderReplicasOnAliveBroker.get(topic)
-        * (1 + balancePercentageWithMargin(optimizationOptions)));
-    return gapBasedBalanceLimit(computedUpperLimit, _avgTopicLeaderReplicasOnAliveBroker.get(topic), false);
+    double avg = _avgTopicLeaderReplicasOnAliveBroker.get(topic);
+    int computedUpperLimit = (int) Math.ceil(avg * (1 + balancePercentageWithMargin(optimizationOptions)));
+    return clampUpper(computedUpperLimit, (int) Math.ceil(avg));
   }
 
   /**
@@ -155,9 +155,9 @@ public class TopicLeaderReplicaDistributionGoal extends AbstractGoal {
    * @return The replica balance lower threshold in number of topic replicas.
    */
   private int balanceLowerLimit(String topic, OptimizationOptions optimizationOptions) {
-    int computedLowerLimit = (int) Math.floor(_avgTopicLeaderReplicasOnAliveBroker.get(topic)
-        * Math.max(0, (1 - balancePercentageWithMargin(optimizationOptions))));
-    return gapBasedBalanceLimit(computedLowerLimit, _avgTopicLeaderReplicasOnAliveBroker.get(topic), true);
+    double avg = _avgTopicLeaderReplicasOnAliveBroker.get(topic);
+    int computedLowerLimit = (int) Math.floor(avg * Math.max(0, (1 - balancePercentageWithMargin(optimizationOptions))));
+    return clampLower(computedLowerLimit, (int) Math.floor(avg));
   }
 
   /**
@@ -209,27 +209,25 @@ public class TopicLeaderReplicaDistributionGoal extends AbstractGoal {
   }
 
   private boolean isLeadershipGoalSatisfiable(String sourceLeaderTopic, Broker sourceBroker, Broker destinationBroker) {
-    return isTopicLeaderCountUnderBalanceUpperLimitAfterChange(sourceLeaderTopic, destinationBroker, ADD)
+    return isTopicLeaderCountUnderUpperLimitAfterChange(sourceLeaderTopic, destinationBroker)
         && (isExcludedForReplicaMove(sourceBroker)
-        || isTopicLeaderCountAboveBalanceLowerLimitAfterChange(sourceLeaderTopic, sourceBroker, REMOVE));
+        || isTopicLeaderCountAboveLowerLimitAfterChange(sourceLeaderTopic, sourceBroker));
   }
 
-  private boolean isTopicLeaderCountUnderBalanceUpperLimitAfterChange(String topic,
-                                                                      Broker broker,
-                                                                      ReplicaDistributionGoal.ChangeType changeType) {
+  private boolean isTopicLeaderCountUnderUpperLimitAfterChange(String topic,
+                                                               Broker broker) {
     int numTopicLeaders = broker.numLeadersFor(topic);
     int brokerBalanceUpperLimit = broker.isAlive() ? _balanceUpperLimitByTopic.get(topic) : 0;
 
-    return changeType == ADD ? numTopicLeaders + 1 <= brokerBalanceUpperLimit : numTopicLeaders - 1 <= brokerBalanceUpperLimit;
+    return numTopicLeaders + 1 <= brokerBalanceUpperLimit;
   }
 
-  private boolean isTopicLeaderCountAboveBalanceLowerLimitAfterChange(String topic,
-                                                                      Broker broker,
-                                                                      ReplicaDistributionGoal.ChangeType changeType) {
+  private boolean isTopicLeaderCountAboveLowerLimitAfterChange(String topic,
+                                                               Broker broker) {
     int numTopicLeaders = broker.numLeadersFor(topic);
     int brokerBalanceLowerLimit = broker.isAlive() ? _balanceLowerLimitByTopic.get(topic) : 0;
 
-    return changeType == ADD ? numTopicLeaders + 1 >= brokerBalanceLowerLimit : numTopicLeaders - 1 >= brokerBalanceLowerLimit;
+    return numTopicLeaders - 1 >= brokerBalanceLowerLimit;
   }
 
   /**
@@ -246,19 +244,6 @@ public class TopicLeaderReplicaDistributionGoal extends AbstractGoal {
   @Override
   public ClusterModelStatsComparator clusterModelStatsComparator() {
     return new GoalUtils.HardGoalStatsComparator();
-  }
-
-  @Override
-  public void configure(Map<String, ?> configs) {
-    super.configure(configs);
-    Object margin = configs.get(BALANCE_MARGIN_CONFIG);
-    if (margin instanceof String) {
-      try {
-        _balanceMargin = Double.parseDouble((String) margin);
-      } catch (NumberFormatException ignore) {
-        // keep default
-      }
-    }
   }
 
   @Override
