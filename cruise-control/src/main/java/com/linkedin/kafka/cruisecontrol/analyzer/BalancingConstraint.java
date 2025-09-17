@@ -167,7 +167,6 @@ public class BalancingConstraint {
     return _topicLeaderReplicaBalanceMaxGap;
   }
 
-
   /**
    * @return The maximum number of replicas per broker.
    */
@@ -381,7 +380,8 @@ public class BalancingConstraint {
         _capacityThreshold.get(Resource.NW_IN), _capacityThreshold.get(Resource.NW_OUT),
         _maxReplicasPerBroker, _replicaBalancePercentage, _leaderReplicaBalancePercentage,
         _topicReplicaBalancePercentage, _topicReplicaBalanceMinGap, _topicReplicaBalanceMaxGap,
-        _topicLeaderReplicaBalancePercentage, _topicLeaderReplicaBalanceMinGap, _topicLeaderReplicaBalanceMaxGap, _topicLeaderReplicaDistributionGoalBalanceMargin,
+        _topicLeaderReplicaBalancePercentage, _topicLeaderReplicaBalanceMinGap, _topicLeaderReplicaBalanceMaxGap,
+        _topicLeaderReplicaDistributionGoalBalanceMargin,
         _goalViolationDistributionThresholdMultiplier, _topicsWithMinLeadersPerBrokerPattern.pattern(),
         _minTopicLeadersPerBroker, _fastModePerBrokerMoveTimeoutMs, _brokerSetResolver.getClass().getName(),
         _replicaToBrokerSetMappingPolicy.getClass().getName());

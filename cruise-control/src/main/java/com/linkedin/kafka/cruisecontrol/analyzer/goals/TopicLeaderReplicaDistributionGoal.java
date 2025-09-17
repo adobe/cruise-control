@@ -5,11 +5,6 @@
 
 package com.linkedin.kafka.cruisecontrol.analyzer.goals;
 
-import static com.linkedin.kafka.cruisecontrol.analyzer.ActionAcceptance.ACCEPT;
-import static com.linkedin.kafka.cruisecontrol.analyzer.ActionAcceptance.REPLICA_REJECT;
-import static com.linkedin.kafka.cruisecontrol.analyzer.goals.GoalUtils.MIN_NUM_VALID_WINDOWS_FOR_SELF_HEALING;
-import static com.linkedin.kafka.cruisecontrol.analyzer.goals.GoalUtils.replicaSortName;
-
 import com.linkedin.kafka.cruisecontrol.analyzer.ActionAcceptance;
 import com.linkedin.kafka.cruisecontrol.analyzer.ActionType;
 import com.linkedin.kafka.cruisecontrol.analyzer.BalancingAction;
@@ -22,6 +17,8 @@ import com.linkedin.kafka.cruisecontrol.model.Replica;
 import com.linkedin.kafka.cruisecontrol.model.ReplicaSortFunctionFactory;
 import com.linkedin.kafka.cruisecontrol.model.SortedReplicasHelper;
 import com.linkedin.kafka.cruisecontrol.monitor.ModelCompletenessRequirements;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -34,9 +31,11 @@ import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
+import static com.linkedin.kafka.cruisecontrol.analyzer.ActionAcceptance.ACCEPT;
+import static com.linkedin.kafka.cruisecontrol.analyzer.ActionAcceptance.REPLICA_REJECT;
+import static com.linkedin.kafka.cruisecontrol.analyzer.goals.GoalUtils.MIN_NUM_VALID_WINDOWS_FOR_SELF_HEALING;
+import static com.linkedin.kafka.cruisecontrol.analyzer.goals.GoalUtils.replicaSortName;
 
 /**
  * Soft goal to balance collocations of leader replicas of the same topic over alive brokers not excluded for replica moves.
@@ -104,8 +103,8 @@ public class TopicLeaderReplicaDistributionGoal extends AbstractGoal {
     if (optimizationOptions.isTriggeredByGoalViolation()) {
       balancePercentage *= _balancingConstraint.goalViolationDistributionThresholdMultiplier();
     }
-    return (balancePercentage - 1) *
-        _balancingConstraint.topicLeaderReplicaDistributionGoalBalanceMargin();
+    return (balancePercentage - 1)
+        * _balancingConstraint.topicLeaderReplicaDistributionGoalBalanceMargin();
   }
 
   /**
@@ -113,6 +112,11 @@ public class TopicLeaderReplicaDistributionGoal extends AbstractGoal {
    * gap settings around the average.
    * - Lower clamping is anchored at floor(avg): [floor(avg)-maxGap, floor(avg)-minGap] (never < 0)
    * - Upper clamping is anchored at ceil(avg):  [ceil(avg)+minGap, ceil(avg)+maxGap]
+   *
+   * @param value the computed raw limit to clamp
+   * @param lo the minimum allowed value after clamping
+   * @param hi the maximum allowed value after clamping
+   * @return the clamped value in the inclusive range [lo, hi]
    *
    * @see com.linkedin.kafka.cruisecontrol.config.constants.AnalyzerConfig#TOPIC_REPLICA_COUNT_BALANCE_MIN_GAP_DOC
    * @see com.linkedin.kafka.cruisecontrol.config.constants.AnalyzerConfig#TOPIC_REPLICA_COUNT_BALANCE_MAX_GAP_DOC
@@ -184,34 +188,40 @@ public class TopicLeaderReplicaDistributionGoal extends AbstractGoal {
       case INTER_BROKER_REPLICA_SWAP:
         String destinationTopic = action.destinationTopic();
         Replica destinationReplica = destinationBroker.replica(action.destinationTopicPartition());
-        if (sourceTopic.equals(destinationTopic) && sourceReplica.isLeader() &&
-            destinationReplica.isLeader()) {
+        if (sourceTopic.equals(destinationTopic)
+            && sourceReplica.isLeader()
+            && destinationReplica.isLeader()) {
           return ACCEPT;
         }
         if (!sourceReplica.isLeader() && !destinationReplica.isLeader()) {
           return ACCEPT;
         }
         if (sourceReplica.isLeader() && !destinationReplica.isLeader()) {
-          return isLeadershipGoalSatisfiable(sourceTopic, sourceBroker, destinationBroker) ?
-              ACCEPT : REPLICA_REJECT;
+          return isLeadershipGoalSatisfiable(sourceTopic, sourceBroker, destinationBroker)
+              ? ACCEPT
+              : REPLICA_REJECT;
         }
         if (!sourceReplica.isLeader() && destinationReplica.isLeader()) {
-          return isLeadershipGoalSatisfiable(destinationTopic, destinationBroker, sourceBroker) ?
-              ACCEPT : REPLICA_REJECT;
+          return isLeadershipGoalSatisfiable(destinationTopic, destinationBroker, sourceBroker)
+              ? ACCEPT
+              : REPLICA_REJECT;
         }
         // Both replicas are leaders but for different topics
         return (isLeadershipGoalSatisfiable(sourceTopic, sourceBroker, destinationBroker)
-            && isLeadershipGoalSatisfiable(destinationTopic, destinationBroker, sourceBroker)) ?
-            ACCEPT : REPLICA_REJECT;
+            && isLeadershipGoalSatisfiable(destinationTopic, destinationBroker, sourceBroker))
+            ? ACCEPT
+            : REPLICA_REJECT;
       case LEADERSHIP_MOVEMENT:
-        return isLeadershipGoalSatisfiable(sourceTopic, sourceBroker, destinationBroker) ? ACCEPT :
-            REPLICA_REJECT;
+        return isLeadershipGoalSatisfiable(sourceTopic, sourceBroker, destinationBroker)
+            ? ACCEPT
+            : REPLICA_REJECT;
       case INTER_BROKER_REPLICA_MOVEMENT:
         if (!sourceReplica.isLeader()) {
           return ACCEPT;
         }
-        return isLeadershipGoalSatisfiable(sourceTopic, sourceBroker, destinationBroker) ? ACCEPT :
-            REPLICA_REJECT;
+        return isLeadershipGoalSatisfiable(sourceTopic, sourceBroker, destinationBroker)
+            ? ACCEPT
+            : REPLICA_REJECT;
       default:
         throw new IllegalArgumentException(
             "Unsupported balancing action " + action.balancingAction() + " is provided.");
@@ -228,7 +238,9 @@ public class TopicLeaderReplicaDistributionGoal extends AbstractGoal {
   private boolean isTopicLeaderCountUnderUpperLimitAfterChange(String topic,
                                                                Broker broker) {
     int numTopicLeaders = broker.numLeadersFor(topic);
-    int brokerBalanceUpperLimit = broker.isAlive() ? _balanceUpperLimitByTopic.get(topic) : 0;
+    int brokerBalanceUpperLimit = broker.isAlive()
+        ? _balanceUpperLimitByTopic.get(topic)
+        : 0;
 
     return numTopicLeaders + 1 <= brokerBalanceUpperLimit;
   }
@@ -236,7 +248,9 @@ public class TopicLeaderReplicaDistributionGoal extends AbstractGoal {
   private boolean isTopicLeaderCountAboveLowerLimitAfterChange(String topic,
                                                                Broker broker) {
     int numTopicLeaders = broker.numLeadersFor(topic);
-    int brokerBalanceLowerLimit = broker.isAlive() ? _balanceLowerLimitByTopic.get(topic) : 0;
+    int brokerBalanceLowerLimit = broker.isAlive()
+        ? _balanceLowerLimitByTopic.get(topic)
+        : 0;
 
     return numTopicLeaders - 1 >= brokerBalanceLowerLimit;
   }
@@ -317,13 +331,15 @@ public class TopicLeaderReplicaDistributionGoal extends AbstractGoal {
       }
     }
     // Log leader distribution per topic for debugging
-    for (String t : _avgTopicLeaderReplicasOnAliveBroker.keySet()) {
+    for (Map.Entry<String, Double> e : _avgTopicLeaderReplicasOnAliveBroker.entrySet()) {
+      String t = e.getKey();
+      double avg = e.getValue();
       Map<Integer, Integer> leadersPerBroker = new TreeMap<>();
       for (Broker b : clusterModel.brokers()) {
         leadersPerBroker.put(b.id(), b.numLeadersFor(t));
       }
       LOG.info("[{}] Topic '{}' leaders per broker: {} | avg={} lowerLimit={} upperLimit={}",
-          name(), t, leadersPerBroker, _avgTopicLeaderReplicasOnAliveBroker.get(t),
+          name(), t, leadersPerBroker, avg,
           _balanceLowerLimitByTopic.get(t), _balanceUpperLimitByTopic.get(t));
     }
 
@@ -358,8 +374,8 @@ public class TopicLeaderReplicaDistributionGoal extends AbstractGoal {
     Broker sourceBroker = clusterModel.broker(action.sourceBrokerId());
     // The action must be executed if currently fixing offline replicas only and the offline source replica is proposed
     // to be moved to another broker.
-    if (_fixOfflineReplicasOnly &&
-        sourceBroker.replica(action.topicPartition()).isCurrentOffline()) {
+    if (_fixOfflineReplicasOnly
+        && sourceBroker.replica(action.topicPartition()).isCurrentOffline()) {
       return action.balancingAction() == ActionType.INTER_BROKER_REPLICA_MOVEMENT;
     }
 
@@ -442,7 +458,9 @@ public class TopicLeaderReplicaDistributionGoal extends AbstractGoal {
 
   private static boolean shouldSkipBecauseNewBrokerPlacement(ClusterModel clusterModel,
                                                              Broker broker, boolean requireLess) {
-    if (!clusterModel.newBrokers().isEmpty() && !broker.isNew() && !requireLess) {
+    if (!clusterModel.newBrokers().isEmpty()
+        && !broker.isNew()
+        && !requireLess) {
       LOG.trace(
           "Skip rebalance: Cluster has new brokers and this broker {} is not new, but does not require less load.",
           broker);
@@ -457,9 +475,10 @@ public class TopicLeaderReplicaDistributionGoal extends AbstractGoal {
                                                  boolean requireLess,
                                                  boolean hasOffline) {
     boolean hasImmigrant = leaderReplicas.stream()
-        .anyMatch(replica -> replica.isLeader() && broker.immigrantReplicas().contains(replica));
-    if (!clusterModel.selfHealingEligibleReplicas().isEmpty() && requireLess && !hasOffline &&
-        !hasImmigrant) {
+        .anyMatch(replica -> replica.isLeader()
+            && broker.immigrantReplicas().contains(replica));
+    if (!clusterModel.selfHealingEligibleReplicas().isEmpty() && requireLess && !hasOffline
+        && !hasImmigrant) {
       LOG.trace(
           "Skip rebalance: Self-healing active; broker {} requires less, but none of its current offline or immigrant replicas are from the topic.",
           broker);
@@ -473,7 +492,8 @@ public class TopicLeaderReplicaDistributionGoal extends AbstractGoal {
                                                       Collection<Replica> leaderReplicas,
                                                       boolean requireLess) {
     boolean hasImmigrant = leaderReplicas.stream()
-        .anyMatch(replica -> replica.isLeader() && broker.immigrantReplicas().contains(replica));
+        .anyMatch(replica -> replica.isLeader()
+            && broker.immigrantReplicas().contains(replica));
     if (moveImmigrantOnly && requireLess && !hasImmigrant) {
       LOG.trace(
           "Skip rebalance: Only immigrant replicas can be moved, but broker {} has none for this topic.",
@@ -520,7 +540,8 @@ public class TopicLeaderReplicaDistributionGoal extends AbstractGoal {
       boolean isExcludedForReplicaMove = isExcludedForReplicaMove(broker);
 
       boolean requireLessLeaders =
-          numOfflineTopicLeaders > 0 || numTopicLeaders > _balanceUpperLimitByTopic.get(topic)
+          numOfflineTopicLeaders > 0
+              || numTopicLeaders > _balanceUpperLimitByTopic.get(topic)
               || isExcludedForReplicaMove;
       boolean requireMoreLeaders = !isExcludedForReplicaMove && broker.isAlive()
           && numTopicLeaders - numOfflineTopicLeaders < _balanceLowerLimitByTopic.get(topic);
@@ -532,8 +553,8 @@ public class TopicLeaderReplicaDistributionGoal extends AbstractGoal {
       }
 
       // Update broker ids over the balance limit for logging purposes.
-      if (requireLessLeaders &&
-          rebalanceByMovingLeadersOut(broker, topic, clusterModel, optimizedGoals,
+      if (requireLessLeaders
+          && rebalanceByMovingLeadersOut(broker, topic, clusterModel, optimizedGoals,
               optimizationOptions)) {
         _brokerIdsAboveBalanceUpperLimitByTopic.computeIfAbsent(topic, t -> new HashSet<>())
             .add(broker.id());
@@ -541,8 +562,8 @@ public class TopicLeaderReplicaDistributionGoal extends AbstractGoal {
             "Failed to sufficiently decrease leaders of topic {} in broker {} with replica movements. Replicas: {}.",
             topic, broker.id(), broker.numLeadersFor(topic));
       }
-      if (requireMoreLeaders &&
-          rebalanceByMovingLeadersIn(broker, topic, clusterModel, optimizedGoals,
+      if (requireMoreLeaders
+          && rebalanceByMovingLeadersIn(broker, topic, clusterModel, optimizedGoals,
               optimizationOptions)) {
         _brokerIdsUnderBalanceLowerLimitByTopic.computeIfAbsent(topic, t -> new HashSet<>())
             .add(broker.id());
@@ -562,7 +583,8 @@ public class TopicLeaderReplicaDistributionGoal extends AbstractGoal {
   }
 
   private Set<Replica> leadersOfTopicInBroker(Broker broker, String topic) {
-    return broker.replicasOfTopicInBroker(topic).stream().filter(Replica::isLeader)
+    return broker.replicasOfTopicInBroker(topic).stream()
+        .filter(Replica::isLeader)
         .collect(Collectors.toSet());
   }
 
@@ -605,8 +627,8 @@ public class TopicLeaderReplicaDistributionGoal extends AbstractGoal {
 
     boolean wasUnableToMoveOfflineReplica = false;
     for (Replica replica : replicasToMoveOut(broker, topic)) {
-      if (wasUnableToMoveOfflineReplica && !replica.isCurrentOffline() &&
-          numLeadersOfTopicInBroker <= balanceUpperLimitForSourceBroker) {
+      if (wasUnableToMoveOfflineReplica && !replica.isCurrentOffline()
+          && numLeadersOfTopicInBroker <= balanceUpperLimitForSourceBroker) {
         // Was unable to move offline replicas from the broker, and remaining replica count is under the balance limit.
         return false;
       }
@@ -634,8 +656,8 @@ public class TopicLeaderReplicaDistributionGoal extends AbstractGoal {
         if (wasOffline) {
           numOfflineTopicReplicas--;
         }
-        if (--numLeadersOfTopicInBroker <=
-            (numOfflineTopicReplicas == 0 ? balanceUpperLimitForSourceBroker : 0)) {
+        if (--numLeadersOfTopicInBroker
+            <= (numOfflineTopicReplicas == 0 ? balanceUpperLimitForSourceBroker : 0)) {
           return false;
         }
 
@@ -644,8 +666,8 @@ public class TopicLeaderReplicaDistributionGoal extends AbstractGoal {
         final int brokerId = b.id();
         boolean isRemoved = candidateBrokers.removeIf(cb -> cb.id() == brokerId);
         LOG.debug("Removed broker {} from candidateBrokers: {}", b.id(), isRemoved);
-        if (b.numLeadersFor(topic) < _balanceUpperLimitByTopic.get(topic) ||
-            _fixOfflineReplicasOnly) {
+        if (b.numLeadersFor(topic) < _balanceUpperLimitByTopic.get(topic)
+            || _fixOfflineReplicasOnly) {
           candidateBrokers.add(b);
         }
       } else if (wasOffline) {
@@ -695,8 +717,8 @@ public class TopicLeaderReplicaDistributionGoal extends AbstractGoal {
     } else {
       for (Broker sourceBroker : clusterModel.brokers()) {
         if (sourceBroker.numLeadersFor(topic) > _balanceLowerLimitByTopic.get(topic)
-            || !sourceBroker.currentOfflineReplicas().isEmpty() ||
-            isExcludedForReplicaMove(sourceBroker)) {
+            || !sourceBroker.currentOfflineReplicas().isEmpty()
+            || isExcludedForReplicaMove(sourceBroker)) {
           eligibleBrokers.add(sourceBroker);
         }
       }
@@ -719,12 +741,14 @@ public class TopicLeaderReplicaDistributionGoal extends AbstractGoal {
         ActionType action;
         if (isExcludedForReplicaMove(aliveDestBroker)) {
           if (aliveDestBroker.replica(replica.topicPartition()) == null) {
-            continue; // leadership transfer impossible; try next
+            // leadership transfer impossible; try next
+            continue;
           }
           action = ActionType.LEADERSHIP_MOVEMENT;
         } else {
           action = (aliveDestBroker.replica(replica.topicPartition()) == null)
-              ? ActionType.INTER_BROKER_REPLICA_MOVEMENT : ActionType.LEADERSHIP_MOVEMENT;
+              ? ActionType.INTER_BROKER_REPLICA_MOVEMENT
+              : ActionType.LEADERSHIP_MOVEMENT;
         }
         Broker b = maybeApplyBalancingAction(clusterModel, replica, candidateBrokers, action,
             optimizedGoals, optimizationOptions);
