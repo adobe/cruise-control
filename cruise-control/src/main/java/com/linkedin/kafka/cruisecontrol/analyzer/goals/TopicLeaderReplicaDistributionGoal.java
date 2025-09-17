@@ -279,10 +279,8 @@ public class TopicLeaderReplicaDistributionGoal extends AbstractGoal {
 
     _brokersAllowedReplicaMove = GoalUtils.aliveBrokersNotExcludedForReplicaMove(clusterModel, optimizationOptions);
     if (_brokersAllowedReplicaMove.isEmpty()) {
-      // Handle the case when all alive brokers are excluded from replica moves.
-      ProvisionRecommendation recommendation = new ProvisionRecommendation.Builder(ProvisionStatus.UNDER_PROVISIONED)
-          .numBrokers(clusterModel.maxReplicationFactor()).build();
-      throw new OptimizationFailureException(String.format("[%s] All alive brokers are excluded from replica moves.", name()), recommendation);
+      // Leadership-only balancing is still possible; proceed without replica movements.
+      LOG.info("[{}] All alive brokers are excluded from replica moves; proceeding with leadership-only balancing.", name());
     }
     // Initialize the average replicas on an alive broker.
     final Map<String, Integer> numTopicLeadersMap = clusterModel.numLeadersPerTopic(clusterModel.topics());
