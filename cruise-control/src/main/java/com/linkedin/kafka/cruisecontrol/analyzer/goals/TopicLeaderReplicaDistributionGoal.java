@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 LinkedIn Corp. Licensed under the BSD 2-Clause License (the "License"). See License in the project root for license information.
+ * Copyright 2025 LinkedIn Corp. Licensed under the BSD 2-Clause License (the "License"). See License in the project root for license information.
  *
  */
 
@@ -114,15 +114,15 @@ public class TopicLeaderReplicaDistributionGoal extends AbstractGoal {
    * - Upper clamping is anchored at ceil(avg):  [ceil(avg)+minGap, ceil(avg)+maxGap]
    *
    * @param value the computed raw limit to clamp
-   * @param lo the minimum allowed value after clamping
-   * @param hi the maximum allowed value after clamping
+   * @param low the minimum allowed value after clamping
+   * @param high the maximum allowed value after clamping
    * @return the clamped value in the inclusive range [lo, hi]
    *
    * @see com.linkedin.kafka.cruisecontrol.config.constants.AnalyzerConfig#TOPIC_REPLICA_COUNT_BALANCE_MIN_GAP_DOC
    * @see com.linkedin.kafka.cruisecontrol.config.constants.AnalyzerConfig#TOPIC_REPLICA_COUNT_BALANCE_MAX_GAP_DOC
    */
-  private int clamp(int value, int lo, int hi) {
-    return Math.max(lo, Math.min(value, hi));
+  private int clamp(int value, int low, int high) {
+    return Math.max(low, Math.min(value, high));
   }
 
   private int clampLower(int computed, int floorAvg) {
@@ -395,11 +395,10 @@ public class TopicLeaderReplicaDistributionGoal extends AbstractGoal {
   @Override
   protected void updateGoalState(ClusterModel clusterModel, OptimizationOptions optimizationOptions)
       throws OptimizationFailureException {
-    if (!_brokerIdsAboveBalanceUpperLimitByTopic.isEmpty()) {
+    boolean hadViolations = !_brokerIdsAboveBalanceUpperLimitByTopic.isEmpty()
+        || !_brokerIdsUnderBalanceLowerLimitByTopic.isEmpty();
+    if (hadViolations) {
       _brokerIdsAboveBalanceUpperLimitByTopic.clear();
-      _succeeded = false;
-    }
-    if (!_brokerIdsUnderBalanceLowerLimitByTopic.isEmpty()) {
       _brokerIdsUnderBalanceLowerLimitByTopic.clear();
       _succeeded = false;
     }
@@ -630,12 +629,12 @@ public class TopicLeaderReplicaDistributionGoal extends AbstractGoal {
     int numOfflineTopicReplicas =
         GoalUtils.retainCurrentOfflineBrokerReplicas(broker, leadersOfTopicInBroker).size();
     // Do not force-drain excluded brokers; respect the same upper limit.
-    Integer upperObj = _balanceUpperLimitByTopic.get(topic);
-    if (upperObj == null) {
+    Integer upperLimit = _balanceUpperLimitByTopic.get(topic);
+    if (upperLimit == null) {
       LOG.warn("No upper limit for topic {} found when moving leaders out; skipping.", topic);
       return false;
     }
-    int balanceUpperLimitForSourceBroker = upperObj;
+    final int balanceUpperLimitForSourceBroker = upperLimit;
 
     boolean wasUnableToMoveOfflineReplica = false;
     for (Replica replica : replicasToMoveOut(broker, topic)) {
@@ -668,13 +667,12 @@ public class TopicLeaderReplicaDistributionGoal extends AbstractGoal {
         if (wasOffline) {
           numOfflineTopicReplicas--;
         }
-        if (--numLeadersOfTopicInBroker
-            <= (numOfflineTopicReplicas == 0 ? balanceUpperLimitForSourceBroker : 0)) {
+        numLeadersOfTopicInBroker--;
+        if (numLeadersOfTopicInBroker <= (numOfflineTopicReplicas == 0 ? balanceUpperLimitForSourceBroker : 0)) {
           return false;
         }
 
         // Remove and reinsert the broker so the order is correct.
-        // Because a TreeSet is used here, and lookups are by comparator first, I'm seeing failed deletes
         final int brokerId = b.id();
         boolean isRemoved = candidateBrokers.removeIf(cb -> cb.id() == brokerId);
         LOG.debug("Removed broker {} from candidateBrokers: {}", b.id(), isRemoved);
@@ -686,7 +684,7 @@ public class TopicLeaderReplicaDistributionGoal extends AbstractGoal {
         wasUnableToMoveOfflineReplica = true;
       }
     }
-    // All the topic replicas has been moved away from the broker.
+    // All the topic leaders has been moved away from the broker.
     return !leadersOfTopicInBroker(broker, topic).isEmpty();
   }
 
@@ -777,10 +775,12 @@ public class TopicLeaderReplicaDistributionGoal extends AbstractGoal {
           if (++numLeadersOfTopicInBroker >= _balanceLowerLimitByTopic.get(topic)) {
             return false;
           }
-          if (!eligibleBrokers.isEmpty() && numOfflineTopicReplicas == 0
-              && sourceBroker.numLeadersFor(topic) < eligibleBrokers.peek().numLeadersFor(topic)) {
-            eligibleBrokers.add(sourceBroker);
-            break;
+          if (!eligibleBrokers.isEmpty() && numOfflineTopicReplicas == 0) {
+            final Broker head = eligibleBrokers.peek();
+            if (head != null && sourceBroker.numLeadersFor(topic) < head.numLeadersFor(topic)) {
+              eligibleBrokers.add(sourceBroker);
+              break;
+            }
           }
         }
       }
