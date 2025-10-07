@@ -330,19 +330,6 @@ public class TopicLeaderReplicaDistributionGoal extends AbstractGoal {
         _avgTopicLeaderReplicasOnAliveBroker.remove(topic);
       }
     }
-    // Log leader distribution per topic for debugging
-    for (Map.Entry<String, Double> e : _avgTopicLeaderReplicasOnAliveBroker.entrySet()) {
-      String t = e.getKey();
-      double avg = e.getValue();
-      Map<Integer, Integer> leadersPerBroker = new TreeMap<>();
-      for (Broker b : clusterModel.brokers()) {
-        leadersPerBroker.put(b.id(), b.numLeadersFor(t));
-      }
-      LOG.info("[{}] Topic '{}' leaders per broker: {} | avg={} lowerLimit={} upperLimit={}",
-          name(), t, leadersPerBroker, avg,
-          _balanceLowerLimitByTopic.get(t), _balanceUpperLimitByTopic.get(t));
-    }
-
     // Filter out replicas to be considered for replica movement.
     for (Broker broker : clusterModel.brokers()) {
       new SortedReplicasHelper().maybeAddSelectionFunc(
@@ -420,16 +407,18 @@ public class TopicLeaderReplicaDistributionGoal extends AbstractGoal {
     // Sanity check: No replica should be moved to a broker, which used to host any replica of the same partition on its broken disk.
     GoalUtils.ensureReplicasMoveOffBrokersWithBadDisks(clusterModel, name());
     // Final per-topic leader distribution after all rebalances
-    for (Map.Entry<String, Double> e : _avgTopicLeaderReplicasOnAliveBroker.entrySet()) {
-      String t = e.getKey();
-      double avg = e.getValue();
-      Map<Integer, Integer> leadersPerBroker = new TreeMap<>();
-      for (Broker b : clusterModel.brokers()) {
-        leadersPerBroker.put(b.id(), b.numLeadersFor(t));
+    if (LOG.isDebugEnabled()) {
+      for (Map.Entry<String, Double> e : _avgTopicLeaderReplicasOnAliveBroker.entrySet()) {
+        String t = e.getKey();
+        double avg = e.getValue();
+        Map<Integer, Integer> leadersPerBroker = new TreeMap<>();
+        for (Broker b : clusterModel.brokers()) {
+          leadersPerBroker.put(b.id(), b.numLeadersFor(t));
+        }
+        LOG.debug("[{}] Topic '{}' leaders per broker: {} | avg={} lowerLimit={} upperLimit={}",
+            name(), t, leadersPerBroker, avg,
+            _balanceLowerLimitByTopic.getOrDefault(t, 0), _balanceUpperLimitByTopic.getOrDefault(t, 0));
       }
-      LOG.info("[{}] Final topic '{}' leaders per broker: {} | avg={} lowerLimit={} upperLimit={}",
-          name(), t, leadersPerBroker, avg,
-          _balanceLowerLimitByTopic.get(t), _balanceUpperLimitByTopic.get(t));
     }
     finish();
   }
