@@ -154,9 +154,6 @@ public class BalancingConstraint {
   }
 
   /**
-   * @return Topic replica balance maximum gap for {@link com.linkedin.kafka.cruisecontrol.analyzer.goals.TopicLeaderReplicaDistributionGoal}.
-   */
-  /**
    * @return Hysteresis margin multiplier for TopicLeaderReplicaDistributionGoal percentage band.
    */
   public double topicLeaderReplicaDistributionGoalBalanceMargin() {
