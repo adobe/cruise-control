@@ -343,6 +343,8 @@ public class ExecutionTaskPlanner {
    *                             controller does not allow updating the ongoing replica reassignment for a partition
    *                             whose replica is being reassigned.
    * @param maxInterBrokerPartitionMovements Maximum cap for number of partitions to move at any time
+   * @param maxEmptyPartitionMovementsPerBroker Maximum concurrent empty (zero-byte) partition moves per broker,
+   *                                            used as an extended limit beyond the normal readyBrokers slots.
    * @return A list of movements that is executable for the ready brokers.
    */
   public List<ExecutionTask> getInterBrokerReplicaMovementTasks(Map<Integer, Integer> readyBrokers,

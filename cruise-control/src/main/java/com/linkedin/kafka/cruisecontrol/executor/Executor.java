@@ -85,6 +85,7 @@ public class Executor {
   private static final Logger LOG = LoggerFactory.getLogger(Executor.class);
   private static final Logger OPERATION_LOG = LoggerFactory.getLogger(OPERATION_LOGGER);
   private static final long EXECUTION_PROGRESS_CHECK_INTERVAL_ADJUSTING_MS = 1000;
+  static final long ZERO_BYTE_MOVE_INITIAL_CHECK_DELAY_MS = 1000;
   // The execution progress is controlled by the ExecutionTaskManager.
   private final ExecutionTaskManager _executionTaskManager;
   private final MetadataClient _metadataClient;
@@ -1837,7 +1838,9 @@ public class Executor {
             totalDataInMB += task.proposal().dataToMoveInMB();
           }
           if (totalDataInMB == 0 && !inExecutionTasks().isEmpty()) {
-            LOG.debug("All in-execution tasks are zero-byte moves, skipping initial sleep.");
+            LOG.debug("All in-execution tasks are zero-byte moves, using reduced initial delay of {}ms.",
+                      ZERO_BYTE_MOVE_INITIAL_CHECK_DELAY_MS);
+            Thread.sleep(ZERO_BYTE_MOVE_INITIAL_CHECK_DELAY_MS);
             cluster = _metadataClient.refreshMetadata().cluster();
           } else {
             cluster = getClusterForExecutionProgressCheck();

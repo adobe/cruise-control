@@ -525,14 +525,15 @@ public class ExecutionTaskPlannerTest {
 
   @Test
   public void testMixedZeroByteAndDataBearingTasks() {
-    // 3 zero-byte proposals + 3 data-bearing proposals, all from broker 0 to broker 1.
+    // Data-bearing proposals added first so they consume the normal slot,
+    // then zero-byte proposals which should overflow into empty-partition slots.
     List<ExecutionProposal> proposals = new ArrayList<>();
     for (int i = 0; i < 3; i++) {
-      proposals.add(new ExecutionProposal(new TopicPartition(TOPIC1, i), 0, _r0,
+      proposals.add(new ExecutionProposal(new TopicPartition(TOPIC1, i), 100, _r0,
                                           Arrays.asList(_r0, _r2), Arrays.asList(_r2, _r1)));
     }
     for (int i = 3; i < 6; i++) {
-      proposals.add(new ExecutionProposal(new TopicPartition(TOPIC1, i), 100, _r0,
+      proposals.add(new ExecutionProposal(new TopicPartition(TOPIC1, i), 0, _r0,
                                           Arrays.asList(_r0, _r2), Arrays.asList(_r2, _r1)));
     }
 
@@ -557,22 +558,20 @@ public class ExecutionTaskPlannerTest {
     List<ExecutionTask> tasks = planner.getInterBrokerReplicaMovementTasks(readyBrokers, Collections.emptySet(),
                                                                            _defaultPartitionsMaxCap, 50);
 
-    // 1 task (data-bearing or zero-byte) uses the normal slot, then remaining zero-byte tasks use empty slots.
-    // Due to round-robin, up to 4 tasks total can be scheduled (1 normal + 3 zero-byte via empty slots, or similar).
-    // At minimum, more than just the normal concurrency (1) should be scheduled.
     int dataBearingCount = 0;
-    int zeroBytCount = 0;
+    int zeroByteCount = 0;
     for (ExecutionTask t : tasks) {
       if (t.proposal().dataToMoveInMB() == 0) {
-        zeroBytCount++;
+        zeroByteCount++;
       } else {
         dataBearingCount++;
       }
     }
-    // Normal slots allow 1 task per broker (min of src/dst). That uses 1 normal slot.
-    // After that, zero-byte tasks can still use the empty-partition slots.
+    // The first data-bearing proposal consumes the single normal slot per broker.
+    // After that, remaining data-bearing tasks can't be scheduled (no normal slots, not zero-byte).
+    // All 3 zero-byte tasks are then scheduled via the empty-partition slots.
     assertEquals("Only 1 data-bearing task should be scheduled with normal concurrency 1", 1, dataBearingCount);
-    assertEquals("All 3 zero-byte tasks should be scheduled via empty partition slots", 3, zeroBytCount);
+    assertEquals("All 3 zero-byte tasks should be scheduled via empty partition slots", 3, zeroByteCount);
   }
 
   @Test

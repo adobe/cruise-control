@@ -839,6 +839,32 @@ public class ExecutorTest extends CCKafkaClientsIntegrationTestHarness {
     assertFalse("Concurrency manager is not reset after execution", executor.isConcurrencyManagerInitialized());
   }
 
+  @Test
+  public void testZeroByteMoveExecution() throws InterruptedException, OngoingExecutionException {
+    KafkaZkClient kafkaZkClient = KafkaCruiseControlUtils.createKafkaZkClient(zookeeper().connectionString(),
+                                                                              "ExecutorTestMetricGroup",
+                                                                              "ZeroByteMoveExecution",
+                                                                              false,
+                                                                              _zkClientConfig);
+    try {
+      Map<String, TopicDescription> topicDescriptions = createTopics(0);
+      int initialLeader0 = topicDescriptions.get(TOPIC0).partitions().get(0).leader().id();
+      int targetBroker = initialLeader0 == 0 ? 1 : 0;
+
+      // Zero-byte inter-broker move: exercises the reduced-delay first-iteration path
+      // in waitForInterBrokerReplicaTasksToFinish.
+      ExecutionProposal proposal =
+          new ExecutionProposal(TP0, 0, new ReplicaPlacementInfo(initialLeader0),
+                                Collections.singletonList(new ReplicaPlacementInfo(initialLeader0)),
+                                Collections.singletonList(new ReplicaPlacementInfo(targetBroker)));
+
+      executeAndVerifyProposals(kafkaZkClient, Collections.singletonList(proposal),
+                                Collections.singletonList(proposal), false, null, false, true);
+    } finally {
+      KafkaCruiseControlUtils.closeKafkaZkClientWithTimeout(kafkaZkClient);
+    }
+  }
+
   private Properties getExecutorProperties() {
     Properties props = new Properties();
     String capacityConfigFile = Objects.requireNonNull(
