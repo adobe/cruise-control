@@ -37,6 +37,9 @@ public class ExecutionConcurrencyManager {
   // The total allowed movement concurrency for all types in the cluster. This value cannot be overridden at runtime.
   private final int _clusterMovementConcurrency;
 
+  // The allowed per-broker concurrency for empty (zero-byte) partition movements.
+  private final int _defaultEmptyPartitionMovementConcurrency;
+
   // The allowed inter-broker partition movement concurrency for each broker.
   private final int _defaultInterBrokerPartitionMovementConcurrency;
   private Integer _requestedInterBrokerPartitionMovementConcurrency;
@@ -74,6 +77,8 @@ public class ExecutionConcurrencyManager {
 
   public ExecutionConcurrencyManager(KafkaCruiseControlConfig config) {
     _clusterMovementConcurrency = config.getInt(ExecutorConfig.MAX_NUM_CLUSTER_MOVEMENTS_CONFIG);
+    _defaultEmptyPartitionMovementConcurrency = config.getInt(
+        ExecutorConfig.NUM_CONCURRENT_EMPTY_PARTITION_MOVEMENTS_PER_BROKER_CONFIG);
     _defaultInterBrokerPartitionMovementConcurrency = config.getInt(ExecutorConfig.NUM_CONCURRENT_PARTITION_MOVEMENTS_PER_BROKER_CONFIG);
     _defaultIntraBrokerPartitionMovementConcurrency = config.getInt(ExecutorConfig.NUM_CONCURRENT_INTRA_BROKER_PARTITION_MOVEMENTS_CONFIG);
     _defaultClusterLeadershipMovementConcurrency = config.getInt(ExecutorConfig.NUM_CONCURRENT_LEADER_MOVEMENTS_CONFIG);
@@ -282,6 +287,13 @@ public class ExecutionConcurrencyManager {
   public synchronized int maxClusterLeadershipMovements() {
     return _requestedClusterLeadershipMovementConcurrency == null ? _defaultClusterLeadershipMovementConcurrency
                                                                             : _requestedClusterLeadershipMovementConcurrency;
+  }
+
+  /**
+   * @return The per-broker concurrency allowed for empty (zero-byte) partition movements.
+   */
+  public int emptyPartitionMovementConcurrency() {
+    return _defaultEmptyPartitionMovementConcurrency;
   }
 
   /**

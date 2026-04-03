@@ -347,11 +347,19 @@ public class ExecutionTaskPlanner {
    */
   public List<ExecutionTask> getInterBrokerReplicaMovementTasks(Map<Integer, Integer> readyBrokers,
                                                                 Set<TopicPartition> inProgressPartitions,
-                                                                int maxInterBrokerPartitionMovements) {
+                                                                int maxInterBrokerPartitionMovements,
+                                                                int maxEmptyPartitionMovementsPerBroker) {
     LOG.trace("Getting inter-broker replica movement tasks for brokers with concurrency {}", readyBrokers);
     List<ExecutionTask> executableReplicaMovements = new ArrayList<>();
     SortedSet<Integer> interPartMoveBrokerIds = new TreeSet<>(_interPartMoveBrokerComparator);
     List<Integer> interPartMoveBrokerIdsList = new ArrayList<>(_interPartMoveTasksByBrokerId.keySet().size());
+
+    // Separate slot tracking for zero-byte (empty) partition moves. These slots are used only after
+    // normal readyBrokers slots are exhausted, allowing empty partition moves to proceed at higher concurrency.
+    Map<Integer, Integer> readyBrokersEmptyPartitions = new HashMap<>();
+    for (Map.Entry<Integer, Integer> entry : readyBrokers.entrySet()) {
+      readyBrokersEmptyPartitions.put(entry.getKey(), maxEmptyPartitionMovementsPerBroker);
+    }
 
     /*
      * The algorithm avoids unfair situation where the available movement slots of a broker is completely taken
@@ -403,33 +411,39 @@ public class ExecutionTaskPlanner {
             continue;
           }
           TopicPartition tp = task.proposal().topicPartition();
-          // Check if the proposal is executable.
-          if (isExecutableProposal(task.proposal(), readyBrokers)
-              && !inProgressPartitions.contains(tp)
-              && !partitionsInvolved.contains(tp)) {
+          if (inProgressPartitions.contains(tp) || partitionsInvolved.contains(tp)) {
+            continue;
+          }
+
+          boolean isZeroByte = task.proposal().dataToMoveInMB() == 0;
+          // Try normal slots first; for zero-byte tasks that don't fit normal slots, try the extended limit.
+          boolean executable = isExecutableProposal(task.proposal(), readyBrokers);
+          boolean useEmptySlots = false;
+          if (!executable && isZeroByte) {
+            executable = isExecutableProposal(task.proposal(), readyBrokersEmptyPartitions);
+            useEmptySlots = executable;
+          }
+
+          if (executable) {
             partitionsInvolved.add(tp);
             executableReplicaMovements.add(task);
-            // Record the brokers as involved in this round and stop involving them again in this round.
             brokerInvolved.add(sourceBroker);
             brokerInvolved.addAll(destinationBrokers);
-            // The first task of each involved broker might have changed.
-            // Let's remove the brokers before the tasks change, then add them again later by comparing their new first tasks.
             interPartMoveBrokerIds.remove(sourceBroker);
             interPartMoveBrokerIds.removeAll(destinationBrokers);
-            // Remove the proposal from the execution plan.
             removeInterBrokerReplicaActionForExecution(task);
             interPartMoveBrokerIds.add(sourceBroker);
             interPartMoveBrokerIds.addAll(destinationBrokers);
-            // Decrement the slots for both source and destination brokers
-            readyBrokers.put(sourceBroker, readyBrokers.get(sourceBroker) - 1);
+
+            Map<Integer, Integer> slotsToDecrement = useEmptySlots ? readyBrokersEmptyPartitions : readyBrokers;
+            slotsToDecrement.put(sourceBroker, slotsToDecrement.get(sourceBroker) - 1);
             for (int broker : destinationBrokers) {
-              readyBrokers.put(broker, readyBrokers.get(broker) - 1);
+              slotsToDecrement.put(broker, slotsToDecrement.get(broker) - 1);
             }
-            // Mark proposal added to true so we will have another round of check.
             newTaskAdded = true;
             numInProgressPartitions++;
-            LOG.debug("Found ready task {} for broker {}. Broker concurrency state: {}", task, brokerId, readyBrokers);
-            // We can stop the check for proposals for this broker because we have found a proposal.
+            LOG.debug("Found ready task {} for broker {}. Broker concurrency state: {}, empty partition state: {}",
+                      task, brokerId, readyBrokers, readyBrokersEmptyPartitions);
             break;
           }
         }

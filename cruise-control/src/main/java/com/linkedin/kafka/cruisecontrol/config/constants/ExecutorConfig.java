@@ -149,6 +149,19 @@ public final class ExecutorConfig {
       + "given point. This is to avoid overwhelming the cluster by inter-broker partition movements.";
 
   /**
+   * <code>num.concurrent.empty.partition.movements.per.broker</code>
+   */
+  public static final String NUM_CONCURRENT_EMPTY_PARTITION_MOVEMENTS_PER_BROKER_CONFIG =
+      "num.concurrent.empty.partition.movements.per.broker";
+  public static final int DEFAULT_NUM_CONCURRENT_EMPTY_PARTITION_MOVEMENTS_PER_BROKER = 100;
+  public static final String NUM_CONCURRENT_EMPTY_PARTITION_MOVEMENTS_PER_BROKER_DOC = "The maximum number of empty "
+      + "(zero-byte) partitions the executor will move to or out of a broker at the same time. Since empty partition "
+      + "moves transfer no data and create no I/O pressure, a much higher concurrency than "
+      + NUM_CONCURRENT_PARTITION_MOVEMENTS_PER_BROKER_CONFIG + " is safe. This limit is applied on top of (not instead "
+      + "of) the normal partition movement concurrency -- zero-byte moves that fit within the normal limit use normal "
+      + "slots first, and only overflow into this extended limit.";
+
+  /**
    * <code>num.concurrent.intra.broker.partition.movements</code>
    */
   public static final String NUM_CONCURRENT_INTRA_BROKER_PARTITION_MOVEMENTS_CONFIG = "num.concurrent.intra.broker.partition.movements";
@@ -706,6 +719,12 @@ public final class ExecutorConfig {
                             atLeast(1),
                             ConfigDef.Importance.MEDIUM,
                             NUM_CONCURRENT_PARTITION_MOVEMENTS_PER_BROKER_DOC)
+                    .define(NUM_CONCURRENT_EMPTY_PARTITION_MOVEMENTS_PER_BROKER_CONFIG,
+                            ConfigDef.Type.INT,
+                            DEFAULT_NUM_CONCURRENT_EMPTY_PARTITION_MOVEMENTS_PER_BROKER,
+                            atLeast(1),
+                            ConfigDef.Importance.MEDIUM,
+                            NUM_CONCURRENT_EMPTY_PARTITION_MOVEMENTS_PER_BROKER_DOC)
                     .define(NUM_CONCURRENT_INTRA_BROKER_PARTITION_MOVEMENTS_CONFIG,
                             ConfigDef.Type.INT,
                             DEFAULT_NUM_CONCURRENT_INTRA_BROKER_PARTITION_MOVEMENTS,

@@ -79,7 +79,8 @@ public class ExecutionTaskManager {
                                                                                           ConcurrencyType.INTER_BROKER_REPLICA);
     return _executionTaskPlanner.getInterBrokerReplicaMovementTasks(
         brokersReadyForReplicaMovement, _inProgressPartitionsForInterBrokerMovement,
-        _executionConcurrencyManager.maxClusterInterBrokerPartitionMovements());
+        _executionConcurrencyManager.maxClusterInterBrokerPartitionMovements(),
+        _executionConcurrencyManager.emptyPartitionMovementConcurrency());
   }
 
   /**

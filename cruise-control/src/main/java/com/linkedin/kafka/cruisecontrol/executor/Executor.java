@@ -1827,8 +1827,24 @@ public class Executor {
       }
 
       boolean retry;
+      boolean isFirstIteration = true;
       do {
-        Cluster cluster = getClusterForExecutionProgressCheck();
+        Cluster cluster;
+        if (isFirstIteration) {
+          isFirstIteration = false;
+          long totalDataInMB = 0;
+          for (ExecutionTask task : inExecutionTasks()) {
+            totalDataInMB += task.proposal().dataToMoveInMB();
+          }
+          if (totalDataInMB == 0 && !inExecutionTasks().isEmpty()) {
+            LOG.debug("All in-execution tasks are zero-byte moves, skipping initial sleep.");
+            cluster = _metadataClient.refreshMetadata().cluster();
+          } else {
+            cluster = getClusterForExecutionProgressCheck();
+          }
+        } else {
+          cluster = getClusterForExecutionProgressCheck();
+        }
         List<ExecutionTask> deadInterBrokerReplicaTasks = new ArrayList<>();
         List<ExecutionTask> stoppedInterBrokerReplicaTasks = new ArrayList<>();
         List<ExecutionTask> slowTasksToReport = new ArrayList<>();

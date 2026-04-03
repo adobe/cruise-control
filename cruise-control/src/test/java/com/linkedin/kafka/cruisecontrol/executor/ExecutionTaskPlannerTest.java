@@ -98,6 +98,7 @@ public class ExecutionTaskPlannerTest {
                                                        new Node(4, "null", -1),
                                                        new Node(5, "null", -1));
   private final int _defaultPartitionsMaxCap = ExecutorConfig.DEFAULT_MAX_NUM_CLUSTER_PARTITION_MOVEMENTS_CONFIG;
+  private final int _defaultEmptyPartitionConcurrency = ExecutorConfig.DEFAULT_NUM_CONCURRENT_EMPTY_PARTITION_MOVEMENTS_PER_BROKER;
 
   @Test
   public void testGetLeaderMovementTasks() {
@@ -265,28 +266,32 @@ public class ExecutionTaskPlannerTest {
 
     basePlanner.addExecutionProposals(proposals, strategyOptions, null);
     List<ExecutionTask> partitionMovementTasks = basePlanner.getInterBrokerReplicaMovementTasks(readyBrokers, Collections.emptySet(),
-                                                                                                _defaultPartitionsMaxCap);
+                                                                                                _defaultPartitionsMaxCap,
+                                                                                                _defaultEmptyPartitionConcurrency);
     assertEquals("First task", _partitionMovement0, partitionMovementTasks.get(0).proposal());
     assertEquals("Second task", _partitionMovement2, partitionMovementTasks.get(1).proposal());
     assertEquals("Third task", _partitionMovement1, partitionMovementTasks.get(2).proposal());
 
     postponeUrpPlanner.addExecutionProposals(proposals, strategyOptions, null);
     partitionMovementTasks = postponeUrpPlanner.getInterBrokerReplicaMovementTasks(readyBrokers, Collections.emptySet(),
-                                                                                   _defaultPartitionsMaxCap);
+                                                                                   _defaultPartitionsMaxCap,
+                                                                                   _defaultEmptyPartitionConcurrency);
     assertEquals("First task", _partitionMovement1, partitionMovementTasks.get(0).proposal());
     assertEquals("Second task", _partitionMovement3, partitionMovementTasks.get(1).proposal());
     assertEquals("Third task", _partitionMovement0, partitionMovementTasks.get(2).proposal());
 
     prioritizeLargeMovementPlanner.addExecutionProposals(proposals, strategyOptions, null);
     partitionMovementTasks = prioritizeLargeMovementPlanner.getInterBrokerReplicaMovementTasks(readyBrokers, Collections.emptySet(),
-                                                                                               _defaultPartitionsMaxCap);
+                                                                                               _defaultPartitionsMaxCap,
+                                                                                               _defaultEmptyPartitionConcurrency);
     assertEquals("First task", _partitionMovement1, partitionMovementTasks.get(0).proposal());
     assertEquals("Second task", _partitionMovement3, partitionMovementTasks.get(1).proposal());
     assertEquals("Third task", _partitionMovement2, partitionMovementTasks.get(2).proposal());
 
     prioritizeSmallMovementPlanner.addExecutionProposals(proposals, strategyOptions, null);
     partitionMovementTasks = prioritizeSmallMovementPlanner.getInterBrokerReplicaMovementTasks(readyBrokers, Collections.emptySet(),
-                                                                                               _defaultPartitionsMaxCap);
+                                                                                               _defaultPartitionsMaxCap,
+                                                                                               _defaultEmptyPartitionConcurrency);
     assertEquals("First task", _partitionMovement0, partitionMovementTasks.get(0).proposal());
     assertEquals("Second task", _partitionMovement2, partitionMovementTasks.get(1).proposal());
     assertEquals("Third task", _partitionMovement3, partitionMovementTasks.get(2).proposal());
@@ -294,7 +299,8 @@ public class ExecutionTaskPlannerTest {
 
     smallUrpMovementPlanner.addExecutionProposals(proposals, strategyOptions, null);
     partitionMovementTasks = smallUrpMovementPlanner.getInterBrokerReplicaMovementTasks(readyBrokers, Collections.emptySet(),
-                                                                                        _defaultPartitionsMaxCap);
+                                                                                        _defaultPartitionsMaxCap,
+                                                                                        _defaultEmptyPartitionConcurrency);
     assertEquals("First task", _partitionMovement3, partitionMovementTasks.get(0).proposal());
     assertEquals("Second task", _partitionMovement1, partitionMovementTasks.get(1).proposal());
     assertEquals("Third task", _partitionMovement0, partitionMovementTasks.get(2).proposal());
@@ -302,7 +308,8 @@ public class ExecutionTaskPlannerTest {
 
     contradictingMovementPlanner.addExecutionProposals(proposals, strategyOptions, null);
     partitionMovementTasks = contradictingMovementPlanner.getInterBrokerReplicaMovementTasks(readyBrokers, Collections.emptySet(),
-                                                                                             _defaultPartitionsMaxCap);
+                                                                                             _defaultPartitionsMaxCap,
+                                                                                             _defaultEmptyPartitionConcurrency);
     assertEquals("First task", _partitionMovement3, partitionMovementTasks.get(0).proposal());
     assertEquals("Second task", _partitionMovement1, partitionMovementTasks.get(1).proposal());
     assertEquals("Third task", _partitionMovement0, partitionMovementTasks.get(2).proposal());
@@ -310,7 +317,8 @@ public class ExecutionTaskPlannerTest {
 
     prioritizeMinIsrMovementPlanner.addExecutionProposals(proposals, strategyOptions, null);
     partitionMovementTasks = prioritizeMinIsrMovementPlanner.getInterBrokerReplicaMovementTasks(readyBrokers, Collections.emptySet(),
-                                                                                                _defaultPartitionsMaxCap);
+                                                                                                _defaultPartitionsMaxCap,
+                                                                                                _defaultEmptyPartitionConcurrency);
     assertEquals("First task", _partitionMovement0, partitionMovementTasks.get(0).proposal());
     assertEquals("Second task", _partitionMovement2, partitionMovementTasks.get(1).proposal());
     assertEquals("Third task", _partitionMovement1, partitionMovementTasks.get(2).proposal());
@@ -354,7 +362,8 @@ public class ExecutionTaskPlannerTest {
     readyBrokers.put(5, 6);
     prioritizeOneAboveMinIsrMovementPlanner.addExecutionProposals(proposals, strategyOptions, null);
     List<ExecutionTask> partitionMovementTasks
-        = prioritizeOneAboveMinIsrMovementPlanner.getInterBrokerReplicaMovementTasks(readyBrokers, Collections.emptySet(), _defaultPartitionsMaxCap);
+        = prioritizeOneAboveMinIsrMovementPlanner.getInterBrokerReplicaMovementTasks(readyBrokers, Collections.emptySet(),
+                                                                                     _defaultPartitionsMaxCap, _defaultEmptyPartitionConcurrency);
     assertEquals("First task", _rf4PartitionMovement2, partitionMovementTasks.get(0).proposal());
     assertEquals("Second task", _rf4PartitionMovement3, partitionMovementTasks.get(1).proposal());
     assertEquals("Third task", _rf4PartitionMovement1, partitionMovementTasks.get(2).proposal());
@@ -387,25 +396,32 @@ public class ExecutionTaskPlannerTest {
     readyBrokers.put(3, 8);
     planner.addExecutionProposals(proposals, strategyOptions, null);
     List<ExecutionTask> partitionMovementTasks = planner.getInterBrokerReplicaMovementTasks(readyBrokers, Collections.emptySet(),
-                                                                                            _defaultPartitionsMaxCap);
+                                                                                            _defaultPartitionsMaxCap,
+                                                                                            _defaultEmptyPartitionConcurrency);
     assertEquals("First task", _partitionMovement0, partitionMovementTasks.get(0).proposal());
     assertEquals("Second task", _partitionMovement2, partitionMovementTasks.get(1).proposal());
     assertEquals("Third task", _partitionMovement1, partitionMovementTasks.get(2).proposal());
 
     planner.addExecutionProposals(proposals, strategyOptions, new PostponeUrpReplicaMovementStrategy());
-    partitionMovementTasks = planner.getInterBrokerReplicaMovementTasks(readyBrokers, Collections.emptySet(), _defaultPartitionsMaxCap);
+    partitionMovementTasks = planner.getInterBrokerReplicaMovementTasks(readyBrokers, Collections.emptySet(),
+                                                                        _defaultPartitionsMaxCap,
+                                                                        _defaultEmptyPartitionConcurrency);
     assertEquals("First task", _partitionMovement1, partitionMovementTasks.get(0).proposal());
     assertEquals("Second task", _partitionMovement3, partitionMovementTasks.get(1).proposal());
     assertEquals("Third task", _partitionMovement0, partitionMovementTasks.get(2).proposal());
 
     planner.addExecutionProposals(proposals, strategyOptions, new PrioritizeLargeReplicaMovementStrategy());
-    partitionMovementTasks = planner.getInterBrokerReplicaMovementTasks(readyBrokers, Collections.emptySet(), _defaultPartitionsMaxCap);
+    partitionMovementTasks = planner.getInterBrokerReplicaMovementTasks(readyBrokers, Collections.emptySet(),
+                                                                        _defaultPartitionsMaxCap,
+                                                                        _defaultEmptyPartitionConcurrency);
     assertEquals("First task", _partitionMovement1, partitionMovementTasks.get(0).proposal());
     assertEquals("Second task", _partitionMovement3, partitionMovementTasks.get(1).proposal());
     assertEquals("Third task", _partitionMovement2, partitionMovementTasks.get(2).proposal());
 
     planner.addExecutionProposals(proposals, strategyOptions, new PrioritizeSmallReplicaMovementStrategy());
-    partitionMovementTasks = planner.getInterBrokerReplicaMovementTasks(readyBrokers, Collections.emptySet(), _defaultPartitionsMaxCap);
+    partitionMovementTasks = planner.getInterBrokerReplicaMovementTasks(readyBrokers, Collections.emptySet(),
+                                                                        _defaultPartitionsMaxCap,
+                                                                        _defaultEmptyPartitionConcurrency);
     assertEquals("First task", _partitionMovement0, partitionMovementTasks.get(0).proposal());
     assertEquals("Second task", _partitionMovement2, partitionMovementTasks.get(1).proposal());
     assertEquals("Third task", _partitionMovement3, partitionMovementTasks.get(2).proposal());
@@ -472,6 +488,124 @@ public class ExecutionTaskPlannerTest {
     assertEquals(0, planner.remainingLeadershipMovements().size());
     assertEquals(0, planner.remainingIntraBrokerReplicaMovements().size());
     EasyMock.verify(mockAdminClient);
+  }
+
+  @Test
+  public void testZeroByteTasksExceedNormalConcurrency() {
+    // Create 10 zero-byte proposals all moving from broker 0 to broker 1.
+    List<ExecutionProposal> proposals = new ArrayList<>();
+    for (int i = 0; i < 10; i++) {
+      proposals.add(new ExecutionProposal(new TopicPartition(TOPIC1, i), 0, _r0,
+                                          Arrays.asList(_r0, _r2), Arrays.asList(_r2, _r1)));
+    }
+
+    Properties props = KafkaCruiseControlUnitTestUtils.getKafkaCruiseControlProperties();
+    ExecutionTaskPlanner planner = new ExecutionTaskPlanner(null, new KafkaCruiseControlConfig(props));
+
+    Set<PartitionInfo> partitions = new HashSet<>();
+    for (ExecutionProposal p : proposals) {
+      partitions.add(generatePartitionInfo(p, false));
+    }
+    Cluster cluster = new Cluster(null, _expectedNodes, partitions, Collections.emptySet(), Collections.emptySet());
+    StrategyOptions strategyOptions = new StrategyOptions.Builder(cluster).build();
+
+    planner.addExecutionProposals(proposals, strategyOptions, null);
+
+    // Normal concurrency is 2 per broker -- too low for 10 proposals.
+    Map<Integer, Integer> readyBrokers = new HashMap<>();
+    readyBrokers.put(0, 2);
+    readyBrokers.put(1, 2);
+    readyBrokers.put(2, 2);
+
+    // With empty-partition concurrency of 50, all 10 zero-byte tasks should be scheduled.
+    List<ExecutionTask> tasks = planner.getInterBrokerReplicaMovementTasks(readyBrokers, Collections.emptySet(),
+                                                                           _defaultPartitionsMaxCap, 50);
+    assertEquals("All 10 zero-byte tasks should be scheduled", 10, tasks.size());
+  }
+
+  @Test
+  public void testMixedZeroByteAndDataBearingTasks() {
+    // 3 zero-byte proposals + 3 data-bearing proposals, all from broker 0 to broker 1.
+    List<ExecutionProposal> proposals = new ArrayList<>();
+    for (int i = 0; i < 3; i++) {
+      proposals.add(new ExecutionProposal(new TopicPartition(TOPIC1, i), 0, _r0,
+                                          Arrays.asList(_r0, _r2), Arrays.asList(_r2, _r1)));
+    }
+    for (int i = 3; i < 6; i++) {
+      proposals.add(new ExecutionProposal(new TopicPartition(TOPIC1, i), 100, _r0,
+                                          Arrays.asList(_r0, _r2), Arrays.asList(_r2, _r1)));
+    }
+
+    Properties props = KafkaCruiseControlUnitTestUtils.getKafkaCruiseControlProperties();
+    ExecutionTaskPlanner planner = new ExecutionTaskPlanner(null, new KafkaCruiseControlConfig(props));
+
+    Set<PartitionInfo> partitions = new HashSet<>();
+    for (ExecutionProposal p : proposals) {
+      partitions.add(generatePartitionInfo(p, false));
+    }
+    Cluster cluster = new Cluster(null, _expectedNodes, partitions, Collections.emptySet(), Collections.emptySet());
+    StrategyOptions strategyOptions = new StrategyOptions.Builder(cluster).build();
+
+    planner.addExecutionProposals(proposals, strategyOptions, null);
+
+    // Normal concurrency of 1 per broker.
+    Map<Integer, Integer> readyBrokers = new HashMap<>();
+    readyBrokers.put(0, 1);
+    readyBrokers.put(1, 1);
+    readyBrokers.put(2, 1);
+
+    List<ExecutionTask> tasks = planner.getInterBrokerReplicaMovementTasks(readyBrokers, Collections.emptySet(),
+                                                                           _defaultPartitionsMaxCap, 50);
+
+    // 1 task (data-bearing or zero-byte) uses the normal slot, then remaining zero-byte tasks use empty slots.
+    // Due to round-robin, up to 4 tasks total can be scheduled (1 normal + 3 zero-byte via empty slots, or similar).
+    // At minimum, more than just the normal concurrency (1) should be scheduled.
+    int dataBearingCount = 0;
+    int zeroBytCount = 0;
+    for (ExecutionTask t : tasks) {
+      if (t.proposal().dataToMoveInMB() == 0) {
+        zeroBytCount++;
+      } else {
+        dataBearingCount++;
+      }
+    }
+    // Normal slots allow 1 task per broker (min of src/dst). That uses 1 normal slot.
+    // After that, zero-byte tasks can still use the empty-partition slots.
+    assertEquals("Only 1 data-bearing task should be scheduled with normal concurrency 1", 1, dataBearingCount);
+    assertEquals("All 3 zero-byte tasks should be scheduled via empty partition slots", 3, zeroBytCount);
+  }
+
+  @Test
+  public void testClusterWideCapRespectedForZeroByteTasks() {
+    // Create 20 zero-byte proposals.
+    List<ExecutionProposal> proposals = new ArrayList<>();
+    for (int i = 0; i < 20; i++) {
+      proposals.add(new ExecutionProposal(new TopicPartition(TOPIC1, i), 0, _r0,
+                                          Arrays.asList(_r0, _r2), Arrays.asList(_r2, _r1)));
+    }
+
+    Properties props = KafkaCruiseControlUnitTestUtils.getKafkaCruiseControlProperties();
+    ExecutionTaskPlanner planner = new ExecutionTaskPlanner(null, new KafkaCruiseControlConfig(props));
+
+    Set<PartitionInfo> partitions = new HashSet<>();
+    for (ExecutionProposal p : proposals) {
+      partitions.add(generatePartitionInfo(p, false));
+    }
+    Cluster cluster = new Cluster(null, _expectedNodes, partitions, Collections.emptySet(), Collections.emptySet());
+    StrategyOptions strategyOptions = new StrategyOptions.Builder(cluster).build();
+
+    planner.addExecutionProposals(proposals, strategyOptions, null);
+
+    Map<Integer, Integer> readyBrokers = new HashMap<>();
+    readyBrokers.put(0, 2);
+    readyBrokers.put(1, 2);
+    readyBrokers.put(2, 2);
+
+    // Set cluster-wide cap to 5 -- should stop at 5 even though empty concurrency allows more.
+    int clusterWideCap = 5;
+    List<ExecutionTask> tasks = planner.getInterBrokerReplicaMovementTasks(readyBrokers, Collections.emptySet(),
+                                                                           clusterWideCap, 100);
+    assertEquals("Cluster-wide cap should be respected", clusterWideCap, tasks.size());
   }
 
   @Test
