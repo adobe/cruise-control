@@ -407,6 +407,9 @@ public class ClusterModel implements Serializable {
    * @return {@code true} if relocation is successful, {@code false} otherwise.
    */
   public boolean relocateLeadership(TopicPartition tp, int sourceBrokerId, int destinationBrokerId) {
+    if (sourceBrokerId == destinationBrokerId) {
+      return false;
+    }
     // Sanity check to see if the source replica is the leader.
     Replica sourceReplica = _partitionsByTopicPartition.get(tp).replica(sourceBrokerId);
     if (!sourceReplica.isLeader()) {
