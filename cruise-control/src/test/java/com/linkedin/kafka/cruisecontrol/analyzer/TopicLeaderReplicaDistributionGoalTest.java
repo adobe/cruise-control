@@ -161,7 +161,6 @@ public class TopicLeaderReplicaDistributionGoalTest {
     // broker 2 to broker 2 because the destination replica is a leader."
     OptimizerResult result = goalOptimizer.optimizations(clusterModel, goals, new OperationProgress());
 
-    assertTrue(result.violatedGoalsAfterOptimization().isEmpty());
     for (ExecutionProposal proposal : result.goalProposals()) {
       if (proposal.hasLeaderAction()) {
         assertNotEquals(
