@@ -1,8 +1,14 @@
 
 preRelease {
   startingVersion = 'RC.0'
-  // The bumping scheme is RC.0 -> RC.1 -> ... -> RC.n
+  // The bumping scheme is RC.0 -> RC.1 -> ... -> RC.n for RC tags,
+  // or adbe-YYYYMMDD-rc for adbe date-based tags (e.g. adbe-20260423, adbe-20260710-rc).
   bump = {
-    "RC.${((it - ~/^RC\./) as int) + 1}"
+    if (it ==~ /^RC\.\d+$/) {
+      "RC.${((it - ~/^RC\./) as int) + 1}"
+    } else {
+      def today = new java.text.SimpleDateFormat('yyyyMMdd').format(new Date())
+      "adbe-${today}-rc"
+    }
   }
 }
