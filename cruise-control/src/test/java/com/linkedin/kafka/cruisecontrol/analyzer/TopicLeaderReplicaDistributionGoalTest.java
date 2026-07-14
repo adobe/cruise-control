@@ -15,6 +15,7 @@ import com.linkedin.kafka.cruisecontrol.config.BrokerCapacityInfo;
 import com.linkedin.kafka.cruisecontrol.config.KafkaCruiseControlConfig;
 import com.linkedin.kafka.cruisecontrol.config.constants.AnalyzerConfig;
 import com.linkedin.kafka.cruisecontrol.executor.Executor;
+import com.linkedin.kafka.cruisecontrol.executor.ExecutionProposal;
 import com.linkedin.kafka.cruisecontrol.model.ClusterModel;
 import com.linkedin.kafka.cruisecontrol.model.Broker;
 import com.linkedin.kafka.cruisecontrol.monitor.ModelGeneration;
@@ -36,6 +37,7 @@ import java.util.function.Function;
 import static com.linkedin.kafka.cruisecontrol.KafkaCruiseControlUnitTestUtils.getAggregatedMetricValues;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 public class TopicLeaderReplicaDistributionGoalTest {
@@ -157,7 +159,18 @@ public class TopicLeaderReplicaDistributionGoalTest {
     List<Goal> goals = Collections.singletonList(new TopicLeaderReplicaDistributionGoal(balancingConstraint));
     // Before the fix this threw IllegalArgumentException: "Cannot relocate leadership … from
     // broker 2 to broker 2 because the destination replica is a leader."
-    goalOptimizer.optimizations(clusterModel, goals, new OperationProgress());
+    OptimizerResult result = goalOptimizer.optimizations(clusterModel, goals, new OperationProgress());
+
+    assertTrue(result.violatedGoalsAfterOptimization().isEmpty());
+    for (ExecutionProposal proposal : result.goalProposals()) {
+      if (proposal.hasLeaderAction()) {
+        assertNotEquals(
+            "Self-leadership-move detected for " + proposal.topicPartition() + ": source == dest == broker " + proposal.oldLeader().brokerId(),
+            proposal.oldLeader().brokerId(),
+            proposal.newLeader().brokerId()
+        );
+      }
+    }
   }
 
   /**
