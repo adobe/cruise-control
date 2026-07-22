@@ -715,9 +715,10 @@ public class TopicLeaderReplicaDistributionGoal extends AbstractGoal {
           .forEach(eligibleBrokers::add);
     } else {
       for (Broker sourceBroker : clusterModel.brokers()) {
-        if (sourceBroker.numLeadersFor(topic) > _balanceLowerLimitByTopic.get(topic)
+        if (sourceBroker.id() != aliveDestBroker.id()
+            && (sourceBroker.numLeadersFor(topic) > _balanceLowerLimitByTopic.get(topic)
             || !sourceBroker.currentOfflineReplicas().isEmpty()
-            || isExcludedForReplicaMove(sourceBroker)) {
+            || isExcludedForReplicaMove(sourceBroker))) {
           eligibleBrokers.add(sourceBroker);
         }
       }
