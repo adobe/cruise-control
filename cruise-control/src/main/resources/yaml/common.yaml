@@ -1,3 +1,10 @@
+ContentTypeOptionsHeader:
+  description: Prevents browsers from interpreting API responses as a different media type.
+  schema:
+    type: string
+    enum:
+      - nosniff
+
 UserTaskIdParameter:
   name: User-Task-ID
   in: header

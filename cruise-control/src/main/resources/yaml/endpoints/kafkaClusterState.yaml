@@ -42,6 +42,8 @@ KafkaClusterStateEndpoint:
     responses:
       '200':
         headers:
+          X-Content-Type-Options:
+            $ref: '../common.yaml#/ContentTypeOptionsHeader'
           User-Task-ID:
             $ref: '../common.yaml#/UserTaskIdHeader'
         description: Current Kafka cluster state.
@@ -54,6 +56,9 @@ KafkaClusterStateEndpoint:
               type: string
       # Response for all errors
       default:
+        headers:
+          X-Content-Type-Options:
+            $ref: '../common.yaml#/ContentTypeOptionsHeader'
         description: Error response.
         content:
           application/json:

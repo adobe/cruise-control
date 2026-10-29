@@ -10,6 +10,8 @@ import com.linkedin.kafka.cruisecontrol.config.constants.ExecutorConfig;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 import com.linkedin.kafka.cruisecontrol.servlet.CruiseControlEndPoint;
 import org.easymock.EasyMock;
 import org.junit.Assert;
@@ -24,6 +26,65 @@ public class ParameterUtilsTest {
   private static final String REPLICATION_THROTTLE_STRING = "1000";
   private static final String DEFAULT_REPLICATION_THROTTLE_STRING = "2000";
   private static final String EXECUTION_PROGRESS_CHECK_INTERVAL_STRING = "1500";
+
+  @Test
+  public void testTopicSelectorsRetainRegexSemantics() {
+    for (String parameter : new String[]{ParameterUtils.TOPIC_PARAM, ParameterUtils.EXCLUDED_TOPICS_PARAM}) {
+      CruiseControlRequestContext request = EasyMock.mock(CruiseControlRequestContext.class);
+      EasyMock.expect(request.getParameterMap()).andReturn(Map.of(parameter, new String[]{"(orders|payments)-[0-9]+"}));
+      EasyMock.expect(request.getParameter(parameter)).andReturn("(orders|payments)-[0-9]+");
+      EasyMock.replay(request);
+      Pattern pattern = ParameterUtils.TOPIC_PARAM.equals(parameter) ? ParameterUtils.topic(request) : ParameterUtils.excludedTopics(request);
+      Assert.assertTrue(pattern.matcher("orders-12").matches());
+      Assert.assertTrue(pattern.matcher("payments-3").matches());
+      Assert.assertFalse(pattern.matcher("other-12").matches());
+      EasyMock.verify(request);
+    }
+  }
+
+  @Test
+  public void testTopicSelectorsRejectMalformedRegex() {
+    for (String parameter : new String[]{ParameterUtils.TOPIC_PARAM, ParameterUtils.EXCLUDED_TOPICS_PARAM}) {
+      CruiseControlRequestContext request = EasyMock.mock(CruiseControlRequestContext.class);
+      EasyMock.expect(request.getParameterMap()).andReturn(Map.of(parameter, new String[]{"["}));
+      EasyMock.expect(request.getParameter(parameter)).andReturn("[");
+      EasyMock.replay(request);
+      Assert.assertThrows(PatternSyntaxException.class, () -> {
+        if (ParameterUtils.TOPIC_PARAM.equals(parameter)) {
+          ParameterUtils.topic(request);
+        } else {
+          ParameterUtils.excludedTopics(request);
+        }
+      });
+      EasyMock.verify(request);
+    }
+  }
+
+  @Test
+  public void testReplicationFactorBodyRetainsRegexSemantics() throws Exception {
+    CruiseControlRequestContext request = EasyMock.mock(CruiseControlRequestContext.class);
+    EasyMock.expect(request.getParameterMap()).andStubReturn(Collections.emptyMap());
+    EasyMock.expect(request.getJson()).andReturn(Map.of("replication_factor",
+        Map.of("topic_by_replication_factor", Map.of(" 3 ", " (orders|payments)-[0-9]+ ", "2", "audit-.*"))));
+    EasyMock.replay(request);
+    Map<Short, Pattern> patterns = ParameterUtils.topicPatternByReplicationFactor(request);
+    Assert.assertEquals(2, patterns.size());
+    Assert.assertTrue(patterns.get((short) 3).matcher("payments-12").matches());
+    Assert.assertTrue(patterns.get((short) 3).matcher("orders-3").matches());
+    Assert.assertFalse(patterns.get((short) 3).matcher("audit-12").matches());
+    Assert.assertTrue(patterns.get((short) 2).matcher("audit-12").matches());
+    EasyMock.verify(request);
+  }
+
+  @Test
+  public void testReplicationFactorBodyRejectsMalformedRegex() throws Exception {
+    CruiseControlRequestContext request = EasyMock.mock(CruiseControlRequestContext.class);
+    EasyMock.expect(request.getParameterMap()).andStubReturn(Collections.emptyMap());
+    EasyMock.expect(request.getJson()).andReturn(Map.of("replication_factor", Map.of("topic_by_replication_factor", Map.of("3", "["))));
+    EasyMock.replay(request);
+    Assert.assertThrows(PatternSyntaxException.class, () -> ParameterUtils.topicPatternByReplicationFactor(request));
+    EasyMock.verify(request);
+  }
 
   @Test
   public void testParseTimeRangeSet() {
