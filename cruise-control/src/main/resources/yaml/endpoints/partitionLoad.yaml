@@ -122,6 +122,8 @@ PartitionLoadEndpoint:
     responses:
       '200':
         headers:
+          X-Content-Type-Options:
+            $ref: '../common.yaml#/ContentTypeOptionsHeader'
           User-Task-ID:
             $ref: '../common.yaml#/UserTaskIdHeader'
         description: Successful partition load state response.
@@ -134,6 +136,8 @@ PartitionLoadEndpoint:
               type: string
       '202':
         headers:
+          X-Content-Type-Options:
+            $ref: '../common.yaml#/ContentTypeOptionsHeader'
           User-Task-ID:
             $ref: '../common.yaml#/UserTaskIdHeader'
         description: Partition load state fetch in progress.
@@ -146,6 +150,9 @@ PartitionLoadEndpoint:
               type: string
       # Response for all errors
       default:
+        headers:
+          X-Content-Type-Options:
+            $ref: '../common.yaml#/ContentTypeOptionsHeader'
         description: Error response.
         content:
           application/json:

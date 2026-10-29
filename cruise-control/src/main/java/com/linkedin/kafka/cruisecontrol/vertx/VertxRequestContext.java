@@ -102,6 +102,7 @@ public class VertxRequestContext implements CruiseControlRequestContext {
     public void writeResponseToOutputStream(int responseCode, boolean json, boolean wantJsonSchema,
                                             String responseMessage) {
         ResponseUtils.setResponseCode(_context, responseCode, _config);
+        _context.response().putHeader("Content-Type", json ? "application/json; charset=UTF-8" : "text/plain; charset=UTF-8");
         _context.response().putHeader("Cruise-Control-Version", KafkaCruiseControl.cruiseControlVersion());
         _context.response().putHeader("Cruise-Control-Commit_Id", KafkaCruiseControl.cruiseControlCommitId());
         if (json && wantJsonSchema) {

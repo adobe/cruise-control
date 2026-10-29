@@ -86,7 +86,7 @@ public class MetricValues {
     _max = Float.MIN_VALUE;
     for (int i = 0; i < _values.length; i++) {
       double toAdd = values[i];
-      _values[i] += toAdd;
+      _values[i] = (float) (_values[i] + toAdd);
       _sumForAvg += toAdd;
       _max = Math.max(_max, _values[i]);
     }
@@ -106,7 +106,7 @@ public class MetricValues {
     _max = Float.MIN_VALUE;
     for (int i = 0; i < _values.length; i++) {
       double toAdd = metricValues.get(i);
-      _values[i] += toAdd;
+      _values[i] = (float) (_values[i] + toAdd);
       _sumForAvg += toAdd;
       _max = Math.max(_max, _values[i]);
     }

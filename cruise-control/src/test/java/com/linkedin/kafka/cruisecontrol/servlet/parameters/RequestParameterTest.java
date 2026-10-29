@@ -74,6 +74,25 @@ public class RequestParameterTest {
   }
 
   /**
+   * Check that every API response documents the browser MIME-sniffing protection.
+   */
+  @Test
+  public void checkContentTypeOptionsHeaders() {
+    for (PathItem path : loadOpenAPI().getPaths().values()) {
+      for (Operation operation : path.readOperations()) {
+        operation.getResponses().forEach((status, response) -> {
+          String context = operation.getOperationId() + " HTTP " + status;
+          Assert.assertNotNull(context, response.getHeaders());
+          Header header = response.getHeaders().get("X-Content-Type-Options");
+          Assert.assertNotNull(context, header);
+          Assert.assertEquals(context, "string", header.getSchema().getType());
+          Assert.assertEquals(context, List.of("nosniff"), header.getSchema().getEnum());
+        });
+      }
+    }
+  }
+
+  /**
    * Check that task identifiers are documented separately from query parameters.
    */
   @Test
