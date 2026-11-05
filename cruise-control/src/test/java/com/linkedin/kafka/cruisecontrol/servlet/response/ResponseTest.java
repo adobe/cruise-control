@@ -98,6 +98,13 @@ public class ResponseTest {
     options.setFlatten(true);
     _openAPI = new OpenAPIV3Parser().read(OPENAPI_SPEC_PATH, null, options);
     for (PathItem path : _openAPI.getPaths().values()) {
+      for (Operation operation : path.readOperations()) {
+        operation.getResponses().forEach((code, response) ->
+            assertEquals(operation.getOperationId() + " " + code, Arrays.asList("nosniff"),
+                response.getHeaders().get("X-Content-Type-Options").getSchema().getEnum()));
+      }
+    }
+    for (PathItem path : _openAPI.getPaths().values()) {
       if (path.getGet() != null) {
         checkOperation(path.getGet());
       }

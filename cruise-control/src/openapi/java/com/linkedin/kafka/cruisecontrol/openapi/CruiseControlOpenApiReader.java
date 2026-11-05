@@ -219,6 +219,7 @@ public class CruiseControlOpenApiReader implements OpenApiReader {
 
   private static ApiResponse response(io.swagger.v3.oas.annotations.responses.ApiResponse metadata, Components components) {
     ApiResponse result = new ApiResponse().description(metadata.description());
+    AnnotationsUtils.getHeaders(metadata.headers(), components, null).ifPresent(result::setHeaders);
     AnnotationsUtils.getContent(metadata.content(), null, null, null, components, null).ifPresent(result::setContent);
     return result;
   }

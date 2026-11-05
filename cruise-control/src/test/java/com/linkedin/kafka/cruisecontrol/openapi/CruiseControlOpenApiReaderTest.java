@@ -164,6 +164,10 @@ public class CruiseControlOpenApiReaderTest {
     assertEquals("uuid", load.getParameters().stream().filter(p -> "header".equals(p.getIn())).findFirst().orElseThrow()
                             .getSchema().getFormat());
     assertTrue(load.getResponses().get("202").getHeaders().containsKey("User-Task-ID"));
+    for (String code : load.getResponses().keySet()) {
+      assertEquals(Arrays.asList("nosniff"),
+          load.getResponses().get(code).getHeaders().get("X-Content-Type-Options").getSchema().getEnum());
+    }
     Schema brokers = api.getComponents().getSchemas().get("BrokerStats");
     assertEquals("array", ((Schema) brokers.getProperties().get("brokers")).getType());
     Schema broker = api.getComponents().getSchemas().get("SingleBrokerStats");
