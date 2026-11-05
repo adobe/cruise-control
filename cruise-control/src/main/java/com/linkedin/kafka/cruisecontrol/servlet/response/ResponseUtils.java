@@ -4,6 +4,7 @@
 
 package com.linkedin.kafka.cruisecontrol.servlet.response;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -28,6 +29,7 @@ public final class ResponseUtils {
   public static final int JSON_VERSION = 1;
   public static final String VERSION = "version";
   @JsonResponseField
+  @Schema(type = "string")
   public static final String MESSAGE = "message";
 
   private ResponseUtils() {
@@ -175,11 +177,14 @@ public final class ResponseUtils {
     return result.toString();
   }
 
-  @JsonResponseClass
+  @Schema(requiredProperties = {"version"})
+  @JsonResponseClass(versioned = true)
   public static class ErrorResponse {
     @JsonResponseField
+    @Schema(type = "string")
     private static final String STACK_TRACE = "stackTrace";
     @JsonResponseField
+    @Schema(type = "string")
     private static final String ERROR_MESSAGE = "errorMessage";
     private final String _errorMessage;
 
