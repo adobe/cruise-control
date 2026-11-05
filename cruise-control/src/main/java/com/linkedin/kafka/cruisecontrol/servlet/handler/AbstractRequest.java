@@ -65,13 +65,18 @@ public abstract class AbstractRequest implements Request {
               + "expired, or mismatched task identifiers cause an HTTP 400 response.",
           schema = @Schema(type = "string", format = "uuid")),
       responses = {
-          @ApiResponse(responseCode = "2XX", headers = @Header(name = USER_TASK_HEADER_NAME,
+          @ApiResponse(responseCode = "2XX", headers = {
+              @Header(name = "X-Content-Type-Options", description = "Prevent MIME type sniffing.",
+                  schema = @Schema(type = "string", allowableValues = {"nosniff"})),
+              @Header(name = USER_TASK_HEADER_NAME,
               description = "UUID assigned to this operation. Reuse it as the User-Task-ID request header "
                   + "when polling an HTTP 202 response or retrieving the same task. This header "
                   + "is also returned for completed synchronous requests. It can be absent when "
                   + "a request is placed in the two-step verification review queue.",
-              schema = @Schema(type = "string", format = "uuid"))),
+              schema = @Schema(type = "string", format = "uuid"))}),
           @ApiResponse(responseCode = "default", description = "Error response.",
+              headers = @Header(name = "X-Content-Type-Options", description = "Prevent MIME type sniffing.",
+                  schema = @Schema(type = "string", allowableValues = {"nosniff"})),
               content = {
                   @Content(mediaType = "application/json", schema = @Schema(ref = "#/components/schemas/ErrorResponse")),
                   @Content(mediaType = "text/plain", schema = @Schema(type = "string"))

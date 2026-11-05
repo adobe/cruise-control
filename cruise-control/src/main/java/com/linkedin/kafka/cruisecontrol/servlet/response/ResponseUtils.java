@@ -46,6 +46,7 @@ public final class ResponseUtils {
     response.setStatus(code);
     response.setContentType(json ? "application/json" : "text/plain");
     response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+    response.setHeader("X-Content-Type-Options", "nosniff");
     boolean corsEnabled = config != null && config.getBoolean(WebServerConfig.WEBSERVER_HTTP_CORS_ENABLED_CONFIG);
     if (corsEnabled) {
       // These headers are exposed to the browser
@@ -65,6 +66,7 @@ public final class ResponseUtils {
    */
   public static void setResponseCode(RoutingContext context, int code, AbstractConfig config) {
     context.response().setStatusCode(code);
+    context.response().putHeader("X-Content-Type-Options", "nosniff");
     boolean corsEnabled = config != null && config.getBoolean(WebServerConfig.WEBSERVER_HTTP_CORS_ENABLED_CONFIG);
     if (corsEnabled) {
       // These headers are exposed to the browser
