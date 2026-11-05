@@ -51,6 +51,7 @@ import org.slf4j.LoggerFactory;
 import static com.linkedin.kafka.cruisecontrol.KafkaCruiseControlUtils.OPERATION_LOGGER;
 import static com.linkedin.kafka.cruisecontrol.KafkaCruiseControlUtils.USER_TASK_MANAGER_SENSOR;
 import static com.linkedin.kafka.cruisecontrol.servlet.KafkaCruiseControlServletUtils.ensureHeaderNotPresent;
+import static com.linkedin.kafka.cruisecontrol.servlet.KafkaCruiseControlServletUtils.GET_METHOD;
 import static com.linkedin.kafka.cruisecontrol.servlet.KafkaCruiseControlServletUtils.httpServletRequestToString;
 import static com.linkedin.kafka.cruisecontrol.servlet.KafkaCruiseControlServletUtils.queryWithParameters;
 import static com.linkedin.kafka.cruisecontrol.servlet.parameters.ParameterUtils.REVIEW_ID_PARAM;
@@ -200,8 +201,9 @@ public class UserTaskManager implements Closeable {
 
   /**
    * This method creates a {@link UserTaskInfo} reference for a new sync or async request and a UUID to map to it. For async request
-   * a {@link SessionKey} is also created to map to the UUID. For async request, both UUID and {@link HttpSession} can be used to fetch
-   * {@link OperationFuture} for the in-progress/completed UserTask. If the UserTaskId is passed in the httpServletRequest
+   * a {@link SessionKey} is also created to map to the UUID. For async requests, both UUID and {@link HttpSession} can fetch
+   * an in-progress task. Completed GET results require an explicit UUID; a headerless GET starts a fresh task.
+   * Completed POST results can still be fetched through the session. If the UserTaskId is passed in the httpServletRequest
    * header then that takes precedence over {@link HttpSession}. For sync task, only UUID can be used to fetch {@link OperationFuture},
    * which already contains the finished result.
    *
@@ -220,6 +222,12 @@ public class UserTaskManager implements Closeable {
                                                    CruiseControlParameters parameters) {
     UUID userTaskId = getUserTaskId(requestContext);
     UserTaskInfo userTaskInfo = getUserTaskByUserTaskId(userTaskId, requestContext);
+    if (userTaskInfo != null && isAsyncRequest && step == 0
+        && GET_METHOD.equals(requestContext.getMethod())
+        && requestContext.getHeader(USER_TASK_HEADER_NAME) == null
+        && userTaskInfo.isUserTaskDone()) {
+      userTaskInfo = null;
+    }
     if (userTaskInfo != null) {
       LOG.info("Fetch an existing UserTask {}", userTaskId);
       requestContext.setHeader(USER_TASK_HEADER_NAME, userTaskId.toString());

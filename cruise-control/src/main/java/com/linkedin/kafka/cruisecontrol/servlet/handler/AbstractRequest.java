@@ -59,7 +59,9 @@ public abstract class AbstractRequest implements Request {
   @Operation(
       parameters = @Parameter(name = USER_TASK_HEADER_NAME, in = ParameterIn.HEADER,
           description = "UUID returned by an earlier request. Send it when polling or retrieving the same "
-              + "operation with the same HTTP method, endpoint, and query parameters. Unknown, "
+              + "operation with the same HTTP method, endpoint, and query parameters. Without this header, "
+              + "a completed asynchronous GET starts a fresh read; pending tasks and completed POSTs can "
+              + "still be retrieved through the HTTP session. Unknown, "
               + "expired, or mismatched task identifiers cause an HTTP 400 response.",
           schema = @Schema(type = "string", format = "uuid")),
       responses = {
