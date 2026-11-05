@@ -22,8 +22,59 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import static com.linkedin.kafka.cruisecontrol.servlet.KafkaCruiseControlServletUtils.GET_METHOD;
+import static com.linkedin.kafka.cruisecontrol.servlet.KafkaCruiseControlServletUtils.POST_METHOD;
 
 public class UserTaskManagerTest {
+
+  @Test
+  public void testCompletedReadStartsFreshUnlessTaskIdIsExplicit() {
+    UUID firstId = UUID.randomUUID();
+    UUID secondId = UUID.randomUUID();
+    UserTaskManager.UuidGenerator generator = EasyMock.mock(UserTaskManager.UuidGenerator.class);
+    EasyMock.expect(generator.randomUUID()).andReturn(firstId);
+    EasyMock.expect(generator.randomUUID()).andReturn(secondId);
+    HttpSession session = getMockHttpSession(System.currentTimeMillis());
+    HttpServletResponse response = EasyMock.niceMock(HttpServletResponse.class);
+    KafkaCruiseControlConfig config = EasyMock.niceMock(KafkaCruiseControlConfig.class);
+    EasyMock.replay(generator, session, response);
+    ServletRequestContext request = new ServletRequestContext(
+        prepareServletRequest(session, null, "/state", Collections.emptyMap()), response, config);
+    OperationFuture first = new OperationFuture("first snapshot");
+    OperationFuture second = new OperationFuture("fresh snapshot");
+    try (UserTaskManager manager = new UserTaskManager(1000, 5, TimeUnit.HOURS.toMillis(6),
+                                                       100, new MockTime(), generator)) {
+      Assert.assertSame(first, manager.getOrCreateUserTask(request, id -> first, 0, true, null).get(0));
+      first.complete(null);
+      Assert.assertSame(second, manager.getOrCreateUserTask(request, id -> second, 0, true, null).get(0));
+      Assert.assertEquals(secondId, manager.getUserTaskId(request));
+      ServletRequestContext explicit = new ServletRequestContext(
+          prepareServletRequest(session, firstId.toString(), "/state", Collections.emptyMap()), response, config);
+      Assert.assertSame(first, manager.getOrCreateUserTask(explicit, id -> second, 0, true, null).get(0));
+    }
+    EasyMock.verify(generator, session, response);
+  }
+
+  @Test
+  public void testCompletedPostStillReusesSessionTask() {
+    UUID taskId = UUID.randomUUID();
+    UserTaskManager.UuidGenerator generator = EasyMock.mock(UserTaskManager.UuidGenerator.class);
+    EasyMock.expect(generator.randomUUID()).andReturn(taskId);
+    HttpSession session = getMockHttpSession(System.currentTimeMillis());
+    HttpServletResponse response = EasyMock.niceMock(HttpServletResponse.class);
+    KafkaCruiseControlConfig config = EasyMock.niceMock(KafkaCruiseControlConfig.class);
+    EasyMock.replay(generator, session, response);
+    ServletRequestContext request = new ServletRequestContext(
+        prepareServletRequest(session, null, "/rebalance", Collections.emptyMap(), POST_METHOD), response, config);
+    OperationFuture first = new OperationFuture("broker operation");
+    try (UserTaskManager manager = new UserTaskManager(1000, 5, TimeUnit.HOURS.toMillis(6),
+                                                       100, new MockTime(), generator)) {
+      Assert.assertSame(first, manager.getOrCreateUserTask(request, id -> first, 0, true, null).get(0));
+      first.complete(null);
+      Assert.assertSame(first, manager.getOrCreateUserTask(request, id -> new OperationFuture("unexpected replay"),
+                                                        0, true, null).get(0));
+    }
+    EasyMock.verify(generator, session, response);
+  }
 
   private static HttpSession getMockHttpSession(long lastAccessedTimeReturn) {
     HttpSession mockHttpSession = EasyMock.mock(HttpSession.class);
@@ -306,10 +357,15 @@ public class UserTaskManagerTest {
   }
 
   private HttpServletRequest prepareServletRequest(HttpSession session, String userTaskId, String resource, Map<String, String []> params) {
+    return prepareServletRequest(session, userTaskId, resource, params, GET_METHOD);
+  }
+
+  private HttpServletRequest prepareServletRequest(HttpSession session, String userTaskId, String resource,
+                                                  Map<String, String []> params, String method) {
     HttpServletRequest request = EasyMock.mock(HttpServletRequest.class);
     EasyMock.expect(request.getSession()).andReturn(session).anyTimes();
     EasyMock.expect(request.getSession(false)).andReturn(session).anyTimes();
-    EasyMock.expect(request.getMethod()).andReturn(GET_METHOD).anyTimes();
+    EasyMock.expect(request.getMethod()).andReturn(method).anyTimes();
     EasyMock.expect(request.getRequestURI()).andReturn(resource).anyTimes();
     EasyMock.expect(request.getPathInfo()).andReturn(resource).anyTimes();
     EasyMock.expect(request.getParameterMap()).andReturn(params).anyTimes();
