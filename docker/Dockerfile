@@ -1,10 +1,10 @@
 # syntax=docker/dockerfile:1
 
-ARG java_version=25
+ARG java_version=21
 ARG java_download_version=${java_version}
 ARG java_download_base_url=https://download.oracle.com/java
 
-FROM gradle:jdk${java_version} AS build
+FROM gradle:jdk21 AS build
 
 ARG java_version
 USER root
