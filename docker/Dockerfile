@@ -1,10 +1,17 @@
-FROM gradle:jdk21 AS build
+# syntax=docker/dockerfile:1
 
+ARG java_version=25
+ARG java_download_version=${java_version}
+ARG java_download_base_url=https://download.oracle.com/java
+
+FROM gradle:jdk${java_version} AS build
+
+ARG java_version
 USER root
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends git ca-certificates
 RUN mkdir /cruise-control
 COPY . /cruise-control
-RUN cd /cruise-control && echo && ./gradlew --console=plain --no-daemon -i clean jar copyDependantLibs
+RUN cd /cruise-control && echo && ./gradlew --console=plain --no-daemon -i -PjavaVersion="${java_version}" clean jar copyDependantLibs
 
 
 RUN ls -la /cruise-control/cruise-control/build/libs/cruise-control-*.jar
@@ -26,6 +33,9 @@ RUN npm run build
 # backported from https://github.com/docker-library/openjdk/blob/master/18/jdk/slim-bullseye/Dockerfile
 FROM debian:bullseye-slim
 
+ARG java_version
+ARG java_download_version
+ARG java_download_base_url
 ARG SOURCE_REF
 ARG SOURCE_TYPE
 ARG DOCKERFILE_PATH
@@ -38,23 +48,29 @@ RUN set -eux; \
 	; \
 	rm -rf /var/lib/apt/lists/*
 
-ENV JAVA_HOME /usr/local/openjdk-21
-ENV PATH $JAVA_HOME/bin:$PATH
+ENV JAVA_HOME=/usr/local/openjdk-${java_version}
+ENV PATH=$JAVA_HOME/bin:$PATH
 
 # Default to UTF-8 file.encoding
-ENV LANG C.UTF-8
-ENV JAVA_VERSION 21
-RUN set -eux; \
+ENV LANG=C.UTF-8
+ENV JAVA_VERSION=${java_version}
+RUN --mount=type=secret,id=JAVA_DOWNLOAD_APIKEY,env=JAVA_DOWNLOAD_APIKEY \
+	set -eux; \
+	\
+	case "$java_download_base_url" in \
+		https://download.oracle.com/*) java_download_base_url="${java_download_base_url}/${java_version}/latest" ;; \
+		*) java_download_base_url="${java_download_base_url}/${java_version}" ;; \
+	esac; \
 	\
 	arch="$(dpkg --print-architecture)"; \
 	case "$arch" in \
 		'amd64') \
-			downloadUrl='https://download.oracle.com/java/21/latest/jdk-21_linux-x64_bin.tar.gz'; \
-			downloadSha256='https://download.oracle.com/java/21/latest/jdk-21_linux-x64_bin.tar.gz.sha256'; \
+			downloadUrl="${java_download_base_url}/jdk-${java_download_version}_linux-x64_bin.tar.gz"; \
+			downloadSha256="${downloadUrl}.sha256"; \
 			;; \
 		'arm64') \
-			downloadUrl='https://download.oracle.com/java/21/latest/jdk-21_linux-aarch64_bin.tar.gz'; \
-			downloadSha256='https://download.oracle.com/java/21/latest/jdk-21_linux-aarch64_bin.tar.gz.sha256'; \
+			downloadUrl="${java_download_base_url}/jdk-${java_download_version}_linux-aarch64_bin.tar.gz"; \
+			downloadSha256="${downloadUrl}.sha256"; \
 			;; \
 		*) echo >&2 "error: unsupported architecture: '$arch'"; exit 1 ;; \
 	esac; \
@@ -62,12 +78,16 @@ RUN set -eux; \
 	savedAptMark="$(apt-mark showmanual)"; \
 	apt-get update; \
 	apt-get install -y --no-install-recommends \
-		wget \
+		curl \
 	; \
 	rm -rf /var/lib/apt/lists/*; \
 	\
-	wget --progress=dot:giga -O openjdk.tgz "$downloadUrl"; \
-    SHA256=$(wget -qO- $downloadSha256) ; \
+	set --; \
+	if [ -n "${JAVA_DOWNLOAD_APIKEY:+set}" ]; then \
+		set -- --variable '%JAVA_DOWNLOAD_APIKEY' --expand-header 'Authorization: Bearer {{JAVA_DOWNLOAD_APIKEY}}'; \
+	fi; \
+	curl --fail --location "$@" --output openjdk.tgz "$downloadUrl"; \
+	SHA256="$(curl --fail --silent --show-error --location "$@" "$downloadSha256")"; \
 	echo "$SHA256 *openjdk.tgz" | sha256sum --strict --check -; \
 	\
 	mkdir -p "$JAVA_HOME"; \
