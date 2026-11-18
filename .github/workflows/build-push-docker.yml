@@ -41,9 +41,9 @@ jobs:
           # secrets: |
           #   JAVA_DOWNLOAD_APIKEY=${{ secrets.JAVA_DOWNLOAD_APIKEY }}
           # build-args: |
-          #   java_version=25
+          #   java_version=21
           #   java_download_base_url=${{ secrets.JAVA_DOWNLOAD_BASE_URL }}
-          #   java_download_version=25.0.1.1
+          #   java_download_version=21.0.13.1
           platforms: linux/amd64,linux/arm64
           file: docker/Dockerfile
           push: ${{ startsWith(github.ref, 'refs/tags/') }}

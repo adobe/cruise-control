@@ -15,12 +15,13 @@ Alternate sources must provide Oracle-style archive filenames and
 matching `.sha256` files for both `x64` and `aarch64`.
 
 For example, to download
-`https://jdk.example.com/java/25/jdk-25.0.1.1_linux-aarch64_bin.tar.gz`:
+`https://jdk.example.com/java/21/jdk-21.0.13.1_linux-aarch64_bin.tar.gz`:
 
 ```bash
 docker buildx build -f docker/Dockerfile \
+  --build-arg java_version=21 \
   --build-arg java_download_base_url=https://jdk.example.com/java \
-  --build-arg java_download_version=25.0.1.1 \
+  --build-arg java_download_version=21.0.13.1 \
   .
 ```
 
@@ -40,5 +41,8 @@ GitHub Actions secret `JAVA_DOWNLOAD_BASE_URL`, and select a matching
 `java_download_version`. For authenticated downloads, also enable the commented
 `secrets` input and configure `JAVA_DOWNLOAD_APIKEY`.
 
-`java_version` selects the runtime Java major version (21 or later) and defaults
-to 25. The Gradle builder remains `gradle:jdk25` regardless of these overrides.
+`java_version` selects the Java major version (21 or later) for both the
+`gradle:jdk${java_version}` builder and the runtime, and defaults to 25.
+The Docker build passes it to Gradle as `-PjavaVersion` so the compiler toolchain
+uses the same version. Local Gradle builds default to JDK 25; the bytecode target
+remains Java 21.

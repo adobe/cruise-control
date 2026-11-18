@@ -4,13 +4,14 @@ ARG java_version=25
 ARG java_download_version=${java_version}
 ARG java_download_base_url=https://download.oracle.com/java
 
-FROM gradle:jdk25 AS build
+FROM gradle:jdk${java_version} AS build
 
+ARG java_version
 USER root
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends git ca-certificates
 RUN mkdir /cruise-control
 COPY . /cruise-control
-RUN cd /cruise-control && echo && ./gradlew --console=plain --no-daemon -i clean jar copyDependantLibs
+RUN cd /cruise-control && echo && ./gradlew --console=plain --no-daemon -i -PjavaVersion="${java_version}" clean jar copyDependantLibs
 
 
 RUN if [ ! -f /cruise-control/cruise-control/build/libs/cruise-control.jar ]; then \
