@@ -34,13 +34,11 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          # Enable these together when selecting an alternate JDK release:
-          # secrets: |
-          #   JAVA_DOWNLOAD_APIKEY=${{ secrets.JAVA_DOWNLOAD_APIKEY }}
-          # build-args: |
-          #   java_version=21
-          #   java_download_base_url=${{ secrets.JAVA_DOWNLOAD_BASE_URL }}
-          #   java_download_version=21.0.13.1
+          secrets: |
+            JAVA_DOWNLOAD_APIKEY=${{ secrets.JAVA_DOWNLOAD_APIKEY }}
+          build-args: |
+            java_download_base_url=${{ secrets.JAVA_DOWNLOAD_BASE_URL }}/21
+            java_version=21.0.13.1
           platforms: linux/amd64,linux/arm64
           file: docker/Dockerfile
           push: ${{ startsWith(github.ref, 'refs/tags/') }}
